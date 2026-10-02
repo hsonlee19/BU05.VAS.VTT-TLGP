@@ -11,7 +11,7 @@ Biểu mẫu rút gọn - áp dụng cho yêu cầu thay đổi/nâng cấp ch�
 | Đơn vị đề xuất | Cần bổ sung |
 | Người đề xuất / Đầu mối liên hệ | Cần bổ sung |
 | Ngày đề xuất | Cần bổ sung |
-| Phiên bản | 0.20 - Chuẩn hóa luồng Bước 1-12, chốt kiểm tra local theo version và bổ sung đề xuất `CONSENT_CONFIG` |
+| Phiên bản | 0.21 - Chốt mô hình 01 Văn bản Consent dùng chung + Phụ lục theo nhóm tuổi; hoàn thiện nghiệp vụ từ Bước 6 |
 
 ## 1. Lịch sử thay đổi
 
@@ -35,6 +35,7 @@ Biểu mẫu rút gọn - áp dụng cho yêu cầu thay đổi/nâng cấp ch�
 | 02/10/2026 | 0.18 | SơnLH21 | Mục 2.5-2.6; 3.1.2-3.1.3; 4.1-4.5; 5 | Tối giản data model policy | Bỏ logical table `CONSENT_POLICY`; reuse/mở rộng bảng `policy` hiện tại của Imuzik. Bổ sung `policy_key`, `is_required_display`, `is_editable`; `current_policy_version` và nguồn Văn bản Consent tiếp tục lấy từ cấu hình DB, chưa khóa thành bảng vật lý riêng. |
 | 02/10/2026 | 0.19 | SơnLH21 | Mục 2.2; 2.5-2.6; 3.1.2-3.1.5; 4.1-4.5; 5 | Chốt với Dev rule policy và mapping CM | Bỏ hoàn toàn `is_required_display` và `policy_key`; `is_required` là rule duy nhất xác định Consent bắt buộc để đi tiếp; `is_editable` xác định trạng thái mặc định tick trên FE; dùng `policy.name` lưu trực tiếp key CM và `sortorder` xác định thứ tự Điều khoản 1-6. |
 | 02/10/2026 | 0.20 | SơnLH21 | Mục 2.5-2.6; 3.1.2-3.1.5; 4.1-4.5; 5 | Chuẩn hóa end-to-end flow theo format BA đã chốt | Local log cùng `current_policy_version` → `is_update=false` mà không đối chiếu lại `confirm_ids`; CM `code=0` + `custPolicyDTO` có dữ liệu → đối chiếu `policy.name` active/required với field cùng tên; bổ sung Bước 4 chọn nhóm tuổi trước `list-policy`; chuẩn hóa Bước 4-12; `is_editable` chỉ dùng xác định trạng thái mặc định tick; đề xuất thêm `CONSENT_CONFIG` để quản lý version/văn bản Consent. |
+| 02/10/2026 | 0.21 | SơnLH21 | Mục 2.5-2.6; 3.1.2-3.1.5; 4.1.1; 4.1.3; 4.2.2; 4.5; 5 | Chốt mô hình Văn bản/Phụ lục Consent và hoàn thiện luồng sau Bước 5 | `CONSENT_CONFIG` lưu 01 Văn bản Consent HTML dùng chung và 02 Phụ lục HTML theo `type`; `GET policy/list-policy` trả `document_content` + `appendix_content` + danh sách policy; chuẩn hóa Bước 6-12 và các rule/mapping liên quan. |
 | 02/10/2026 | 0.10 | SơnLH21 | Mục 3.1.3 - Bước 1 đến Bước 6 | Chuẩn hóa riêng luồng `GET policy/check-policy` | Bước 1 chỉ mô tả FE gọi API và request; gom logic BE cũ Bước 2-5 thành Bước 2.1-2.4; Bước 6 đổi thành Bước 3 mô tả response/xử lý response; bổ sung các response lỗi đã có trong tài liệu XML hiện trạng. Chưa cập nhật các bước phía sau |
 
 ## 2. Thông tin tổng quan
@@ -59,7 +60,7 @@ Theo nội dung Q&A Round 1:
 - Kiểm tra trạng thái Consent của khách hàng khi thực hiện đăng nhập Imuzik bằng số điện thoại.
 - Áp dụng trên Website, Wapsite và App Imuzik.
 - Không áp dụng đăng nhập Google/Facebook.
-- Không bổ sung Mini App/Tammi/MyViettel hoặc kênh khác trong phiên bản 0.9.
+- Không bổ sung Mini App/Tammi/MyViettel hoặc kênh khác trong phiên bản 0.21.
 - Imuzik gọi CM để lấy 06 giá trị Consent hiện hành theo số thuê bao.
 - Imuzik tự so sánh dữ liệu CM với cấu hình Consent lưu trong DB Imuzik để quyết định luồng tiếp theo; không đọc rule/version Consent từ file config.
 - Sử dụng một rule bắt buộc duy nhất tại bảng `policy`:
@@ -103,45 +104,46 @@ Theo nội dung Q&A Round 1:
 
 ### 2.5 Hiện trạng API/FE xác nhận chính sách Imuzik và định hướng reuse
 
-Imuzik hiện đã có module **Popup xác nhận chính sách**. Phương án v0.20 ưu tiên reuse contract API hiện có để giảm ảnh hưởng FE, đồng thời tham chiếu cách tổ chức luồng FE của MyClip. Logic quyết định Consent theo thứ tự **cấu hình Consent hiện hành → `log_privacy_policy` local → CM khi cần đối soát**.
+Imuzik hiện đã có module **Popup xác nhận chính sách**. Phương án v0.21 ưu tiên reuse contract API hiện có, đồng thời bổ sung dữ liệu Văn bản Consent/Phụ lục theo cấu hình DB. Logic quyết định Consent theo thứ tự **cấu hình Consent hiện hành → `log_privacy_policy` local → CM khi cần đối soát**.
 
-| API/Thành phần hiện tại | Hiện trạng | Xử lý v0.20 |
+| API/Thành phần hiện tại | Hiện trạng | Xử lý v0.21 |
 |---|---|---|
 | `GET policy/check-policy` | Nhận `authorization_code` optional, `token` required; logic cũ kiểm tra `vt_member.created_at` và `is_update_policy`; response có `is_update` | **Reuse endpoint/contract chính**. Giữ `is_update` để FE biết có hiển thị popup hay không; BE lấy `current_policy_version`, check local log trước và chỉ gọi CM khi chưa có local log hoặc local khác `current_policy_version` |
-| `GET policy/list-policy` | Lấy policy active theo `sortorder` | **Reuse endpoint**, bổ sung tham số bắt buộc `type` (`0` = từ 16 tuổi trở lên, `1` = dưới 16 tuổi). Mỗi policy sử dụng `is_required` để xác định Consent bắt buộc và `is_editable` để xác định trạng thái mặc định tick trên FE. `policy.name` dùng nội bộ BE để map CM, không bắt buộc FE phải biết |
+| `GET policy/list-policy` | Lấy policy active theo `sortorder`; response hiện tại chỉ gồm `id`, `description`, `is_required` | **Reuse endpoint**, bổ sung tham số bắt buộc `type` (`0` = từ 16 tuổi trở lên, `1` = dưới 16 tuổi). BE trả 01 Văn bản Consent HTML dùng chung, 01 Phụ lục HTML tương ứng `type` và danh sách policy active. Mỗi policy sử dụng `is_required` để xác định Consent bắt buộc và `is_editable` để xác định trạng thái mặc định tick trên FE. `policy.name` dùng nội bộ BE để map CM, không bắt buộc FE phải biết |
 | `POST policy/policy` | Nhận `policy_id`; hiện tại cập nhật trực tiếp `vt_member.is_update_policy=1`, `policy_id`, `updated_at` | **Reuse endpoint**, tiếp tục nhận danh sách `policy_id` để tương thích contract hiện tại. BE tra cứu `policy.name` của từng ID để build đủ 06 field CM; `sortorder` xác định thứ tự Điều khoản 1-6. Xử lý: validate `is_required` → SAVE CM → nếu `code=0` hoặc timeout/lỗi server sau 3 retry theo rule fallback thì ghi `log_privacy_policy`. Không update `vt_member.is_update_policy` làm nguồn trạng thái Consent |
 | `vt_member.policy_id` | Lưu danh sách `policy.id` khách hàng đã chọn | **Legacy**. Không dùng làm source of truth cho luồng mới; giữ lại nếu chức năng cũ còn tham chiếu và xử lý deprecated theo kế hoạch migration |
 | `vt_member.is_update_policy` | Cờ local 0/1 quyết định popup theo luồng cũ | **Deprecated khỏi logic Consent mới**. Không đọc field này để quyết định popup và không cần cập nhật field này trong luồng mới |
 | Bảng `policy` hiện tại | Reuse bảng hiện tại | **Không tạo `CONSENT_POLICY` riêng**. Chốt với Dev: dùng `is_required` làm rule Consent bắt buộc; dùng `is_editable` cho trạng thái mặc định tick; cập nhật giá trị `name` của 06 policy thành đúng 06 field CM; dùng `sortorder` xác định thứ tự Điều khoản 1-6 |
+| `CONSENT_CONFIG` | Chưa có trong module Imuzik hiện tại | **Đề xuất bổ sung** để quản lý `policy_version`, 01 Văn bản Consent HTML dùng chung, 02 Phụ lục HTML theo `type`, trạng thái current/active |
 | `log_privacy_policy` | Chưa có trong module Imuzik hiện tại | **Bổ sung theo hướng MyClip** để lưu snapshot Consent local theo user/MSISDN, nhóm tuổi, version và danh sách `policy.id` đã chọn |
 
-**Nội dung hiện trạng bị ghi đè/cập nhật trong v0.20:**
+**Nội dung hiện trạng bị ghi đè/cập nhật trong v0.21:**
 
 - Bỏ rule `vt_member.created_at < 01/07/2023 => không hiển thị popup`.
 - Bỏ `vt_member.is_update_policy` khỏi toàn bộ logic quyết định popup Consent mới.
 - Bỏ `policy_key`. Sử dụng trực tiếp `policy.name` làm key mapping CM; dữ liệu `name` của 06 policy lần lượt là `provideProduct`, `supportCustomer`, `improveQuality`, `marketingAdvertising`, `researchMarket`, `tradePromotion`.
 - Bỏ hoàn toàn `is_required_display`. FE/BE dùng duy nhất `is_required` cho rule Consent bắt buộc; `is_editable` chỉ phục vụ trạng thái mặc định tick trên FE.
+- Không quản lý 02 Văn bản Consent theo nhóm tuổi. `CONSENT_CONFIG` lưu **01 Văn bản Consent dùng chung**; khác biệt theo nhóm tuổi được quản lý tại **Phụ lục HTML** tương ứng `type=0/1`.
 - Quyết định cuối cùng sử dụng dữ liệu CM, cấu hình DB Imuzik và `log_privacy_policy`/version local theo tài liệu này.
 
 ### 2.6 Mapping FE MyClip và định hướng tối ưu cho Imuzik
 
-MyClip được sử dụng làm nguồn tham chiếu về **cách tổ chức luồng FE**, không phải nguồn để sao chép nguyên contract/API hoặc cấu trúc lưu nội dung. Tài liệu FE MyClip cho thấy luồng tách rõ: API kiểm tra có cần xác nhận, bước chọn nhóm tuổi, API lấy nội dung/policy và API ghi nhận Consent. MyClip truyền `type=0` cho nhóm từ 16 tuổi trở lên và `type=1` cho nhóm dưới 16 tuổi; khi submit truyền danh sách `confirmIds` cùng `type`.
+MyClip được sử dụng làm nguồn tham chiếu về **cách tổ chức luồng FE và cách trả nội dung Consent**, không sao chép nguyên contract/API. Theo thông tin Dev cung cấp, MyClip trả Văn bản Consent dạng HTML; khi trả danh sách điều khoản đồng thời trả thêm nội dung Phụ lục HTML tương ứng. Imuzik áp dụng cùng nguyên tắc nghiệp vụ nhưng chuẩn hóa response để FE không phải tự parse cấu trúc article/index.
 
-**Tối ưu data model cho Imuzik:** MyClip không cần một bảng policy riêng cho 06 mục đích trong luồng FE mà lấy danh sách mục đích từ cấu hình nội dung. Imuzik hiện đã có bảng `policy` phục vụ chính endpoint `list-policy`, vì vậy phương án v0.20 reuse bảng này thay vì tạo thêm bảng policy khác.
-
-| Nội dung | MyClip | Imuzik v0.20 |
+| Nội dung | MyClip | Imuzik v0.21 |
 |---|---|---|
 | Kiểm tra có cần Consent | API check trả `isRequireConfirm` | Reuse `GET policy/check-policy`, giữ `data.is_update` để giảm impact FE |
 | Chọn nhóm tuổi | FE hiển thị chọn nhóm tuổi trước khi tải nội dung phù hợp | Reuse; FE chọn `type` trước `GET policy/list-policy` |
 | Giá trị `type` | `0`: từ 16 tuổi trở lên; `1`: dưới 16 tuổi | Reuse nguyên |
-| Lấy nội dung Consent | MyClip lấy article JSON và FE parse `parent_contents`/`privacy_policy_purpose` | **Không reuse**; Imuzik BE trả sẵn đúng document + policies theo `type` |
-| Rule bắt buộc | MyClip dùng `require=true/false` | Mapping sang `is_required`; FE chỉ dùng để enable/disable nút xác nhận |
-| Trạng thái mặc định policy | MyClip có rule riêng theo nội dung/note | Imuzik dùng `is_editable` để FE xác định policy mặc định tick |
+| Văn bản Consent chính | Trả nội dung Văn bản dạng HTML | `CONSENT_CONFIG.document_content`; 01 Văn bản dùng chung cho cả 02 nhóm tuổi |
+| Phụ lục theo nhóm tuổi | API lấy điều khoản đồng thời trả thêm nội dung Phụ lục HTML tương ứng | `CONSENT_CONFIG` lưu 02 Phụ lục HTML; BE căn cứ `type` để chỉ trả `appendix_content` tương ứng |
+| Danh sách điều khoản | API trả danh sách mục đích xử lý | Reuse bảng `policy` hiện tại; chỉ lấy `is_active=1`, sắp xếp theo `sortorder` |
+| Rule bắt buộc | MyClip dùng `require=true/false` | Mapping sang `is_required`; FE dùng để xác định điều kiện cho phép xác nhận |
+| Trạng thái mặc định policy | MyClip có rule cấu hình riêng | Imuzik dùng `is_editable` để FE xác định trạng thái mặc định tick |
 | Submit | `confirmIds` + `type` | Reuse tư tưởng; Imuzik giữ `policy_id` + `type`, BE tra `policy.name` để map trực tiếp sang field CM |
 | Scroll hết mới xác nhận / checkbox tổng auto-select | Có trong FE MyClip | **Không đưa vào Imuzik nếu chưa có yêu cầu** |
-| Default tick toàn bộ | Có trong MyClip | **Không mặc định reuse**; trạng thái tick ban đầu của từng policy lấy theo `is_editable` của Imuzik |
 
-**Nguyên tắc tối ưu FE Imuzik:** FE chỉ thực hiện render và validation hiển thị cơ bản theo response BE; không tự parse JSON article, không tự chọn phụ lục theo index, không tự hard-code policy bắt buộc và không tự map policy sang key CM.
+**Nguyên tắc tối ưu FE Imuzik:** FE chỉ thực hiện render dữ liệu BE trả về và validation hiển thị cơ bản; không tự parse article JSON, không tự chọn Phụ lục theo index, không tự hard-code policy bắt buộc và không tự map policy sang key CM.
 
 ## 3. Yêu cầu về chức năng
 
@@ -207,9 +209,12 @@ sequenceDiagram
         FE-->>KH: Hiển thị popup chọn nhóm tuổi
         KH->>FE: Chọn type=0/1 và Tiếp tục
         FE->>BE: GET policy/list-policy(token, type)
-        BE->>DB: Lấy Văn bản Consent hiện hành theo type + policy active
-        BE-->>FE: Văn bản Consent + policy + is_required/is_editable
-        FE-->>KH: Hiển thị Văn bản Consent và policy
+        BE->>DB: Lấy CONSENT_CONFIG current/active
+        DB-->>BE: policy_version + document_content + 02 appendix HTML
+        BE->>DB: Lấy policy is_active=1 ORDER BY sortorder
+        BE->>BE: Chọn appendix_content theo type
+        BE-->>FE: document_content + appendix_content + policies
+        FE-->>KH: Hiển thị Văn bản + Phụ lục + policy
         KH->>FE: Chọn policy và nhấn Xác nhận/Đồng ý
         FE->>BE: POST policy/policy(token, type, policy_id)
         BE->>DB: Validate policy active + is_required
@@ -240,7 +245,7 @@ sequenceDiagram
 |---|---|---|---|
 | Kiểm tra có cần Consent | `GET policy/check-policy`; `CONSENT_CONFIG`; `log_privacy_policy`; CM `getCustPolicy` | Xác thực user → lấy `current_policy_version` → check local log → chỉ gọi CM khi chưa có log hoặc local khác version → trả `is_update` | Bỏ logic quyết định dựa trên `vt_member.created_at`/`vt_member.is_update_policy` |
 | Chọn nhóm tuổi | FE local state | KH chọn `type=0/1` | Thực hiện ngay sau khi `check-policy` trả `is_update=true`, trước `GET policy/list-policy` |
-| Lấy Văn bản và điều khoản | `GET policy/list-policy?type=...`; `CONSENT_CONFIG`; bảng `policy` | Trả đúng Văn bản Consent theo nhóm tuổi/version và danh sách policy active | FE không parse article JSON; BE trả `is_required`, `is_editable`; `policy.name` dùng nội bộ để map CM |
+| Lấy Văn bản, Phụ lục và điều khoản | `GET policy/list-policy?type=...`; `CONSENT_CONFIG`; bảng `policy` | Lấy 01 Văn bản Consent HTML dùng chung → chọn Phụ lục HTML theo `type` → lấy policy active theo `sortorder` → trả dữ liệu cho FE | FE không parse article JSON; BE trả `document_content`, `appendix_content`, `is_required`, `is_editable`; `policy.name` chỉ dùng nội bộ để map CM |
 | Xác nhận Consent | `POST policy/policy`; CM `updateCustPolicy`; `log_privacy_policy` | Validate policy bắt buộc → build 06 field CM → SAVE CM → ghi local log theo rule đã chốt | Không gọi `getCustPolicy` lần 2 trước SAVE; không update `vt_member.is_update_policy` làm source of truth |
 
 **Nguyên tắc chung**
@@ -249,7 +254,9 @@ sequenceDiagram
 - `policy.name` lưu trực tiếp key CM và được dùng để mapping field trong `custPolicyDTO`.
 - `policy.sortorder` xác định thứ tự Điều khoản 1-6 và thứ tự hiển thị.
 - `is_required` xác định policy khách hàng bắt buộc phải Consent để được đi tiếp.
-- `is_editable` chỉ xác định trạng thái mặc định tick của policy trên FE; không tham gia quyết định `is_update`.
+- `is_editable` chỉ xác định trạng thái mặc định tick của policy trên FE; không tham gia quyết định `is_update` và không dùng để suy ra quyền khóa/mở checkbox.
+- `CONSENT_CONFIG.document_content` là 01 Văn bản Consent HTML dùng chung cho cả 02 nhóm tuổi.
+- `CONSENT_CONFIG.appendix_type_0_content` và `appendix_type_1_content` là 02 Phụ lục HTML; BE chọn đúng Phụ lục theo `type` và trả về FE dưới field `appendix_content`.
 - Không sử dụng `is_required_display` hoặc `policy_key`.
 - `consent`, `displayConsent`, `systemType` từ CM không dùng để quyết định nghiệp vụ Imuzik trong phạm vi hiện tại.
 
@@ -462,18 +469,30 @@ Ví dụ:
 GET policy/list-policy?type=0&token=<token>&authorization_code=<authorization_code>
 ```
 
-##### Bước 6 - Imuzik BE: Xử lý lấy Văn bản Consent và danh sách policy
+##### Bước 6 - Imuzik BE: Xử lý lấy Văn bản Consent, Phụ lục và danh sách policy
 
 Imuzik BE thực hiện:
 
 1. Validate thông tin request:
    - `token` hợp lệ;
    - `type ∈ {0,1}`.
-2. Lấy cấu hình `CONSENT_CONFIG` hiện hành tương ứng `current_policy_version` và `type` khách hàng đã chọn.
-3. Lấy Văn bản Consent tương ứng nhóm tuổi/version hiện hành.
-4. Lấy danh sách policy thỏa mãn `policy.is_active = 1`.
-5. Sắp xếp danh sách policy theo `policy.sortorder ASC`.
-6. Trả Văn bản Consent và danh sách policy về FE.
+2. Query bản ghi `CONSENT_CONFIG` đang `is_current=1` và `status=active`.
+3. Lấy `policy_version` của bản ghi và gán nội bộ thành `current_policy_version`.
+4. Lấy `document_content` - Văn bản Consent HTML dùng chung cho cả 02 nhóm tuổi.
+5. Căn cứ `type` khách hàng đã chọn để lấy Phụ lục:
+   - `type = 0` → lấy `appendix_type_0_content` và trả ra `appendix_content`;
+   - `type = 1` → lấy `appendix_type_1_content` và trả ra `appendix_content`.
+6. Lấy danh sách policy thỏa mãn `policy.is_active = 1`, sắp xếp theo `policy.sortorder ASC`.
+7. Trả Văn bản Consent, Phụ lục tương ứng nhóm tuổi và danh sách policy về FE.
+
+**Truy vấn policy**
+
+```sql
+SELECT id, description, is_required, is_editable
+FROM policy
+WHERE is_active = 1
+ORDER BY sortorder ASC;
+```
 
 **Response đề xuất**
 
@@ -484,10 +503,8 @@ Imuzik BE thực hiện:
   "data": {
     "policy_version": "<current_policy_version>",
     "type": 0,
-    "document": {
-      "id": "<document_id>",
-      "file_url": "<consent_document_url>"
-    },
+    "document_content": "<HTML Văn bản Consent>",
+    "appendix_content": "<HTML Phụ lục tương ứng type>",
     "policies": [
       {
         "id": 1,
@@ -502,21 +519,29 @@ Imuzik BE thực hiện:
 
 Trong đó:
 
+- `policy_version`: version Consent hiện hành lấy từ `CONSENT_CONFIG`.
+- `document_content`: 01 Văn bản Consent HTML dùng chung, không phụ thuộc `type`.
+- `appendix_content`: Phụ lục HTML đã được BE chọn theo `type`; FE không tự chọn Phụ lục theo index/cấu hình.
 - `is_required`: xác định policy bắt buộc khách hàng phải Consent để được tiếp tục.
 - `is_editable`: xác định trạng thái mặc định tick của policy trên FE.
-- `sortorder`: sử dụng tại BE để xác định thứ tự Điều khoản 1-6 và thứ tự trả danh sách policy.
+- `sortorder`: sử dụng tại BE để xác định thứ tự Điều khoản 1-6 và thứ tự trả danh sách policy; không bắt buộc trả về FE.
 - `policy.name`: sử dụng tại BE để mapping với field cùng tên của CM; không bắt buộc trả về FE.
-- Cấu trúc `document.id`/`document.file_url`: **Cần Dev chốt theo cấu trúc lưu Văn bản Consent thực tế**.
 
-##### Bước 7 - Imuzik FE: Hiển thị Văn bản Consent
+Nếu lỗi truy vấn DB/cấu hình → reuse mã lỗi hệ thống `000001` theo convention API Imuzik hiện tại.
 
-Sau khi `GET policy/list-policy` trả thành công, FE hiển thị Văn bản Consent và danh sách policy theo dữ liệu BE trả về.
+Mã lỗi validate khi `type` không thuộc `{0,1}`: **Cần Dev chốt theo convention API hiện tại**.
+
+##### Bước 7 - Imuzik FE: Hiển thị Văn bản Consent, Phụ lục và danh sách policy
+
+Sau khi `GET policy/list-policy` trả thành công, FE hiển thị dữ liệu theo response BE trả về.
 
 **Xử lý tại FE**
 
-- Hiển thị Văn bản Consent tương ứng với nhóm tuổi khách hàng đã chọn.
-- Hiển thị danh sách policy theo thứ tự BE trả về.
+- Hiển thị `document_content` - Văn bản Consent dùng chung.
+- Hiển thị `appendix_content` - Phụ lục tương ứng nhóm tuổi khách hàng đã chọn tại Bước 4.
+- Hiển thị danh sách policy theo đúng thứ tự BE trả về.
 - Thiết lập trạng thái tick mặc định của từng policy theo `is_editable`.
+- Không sử dụng `is_editable` để xác định quyền khóa/mở checkbox; field này chỉ dùng cho trạng thái tick mặc định theo chốt Dev.
 - Kiểm tra các policy có `is_required = 1`:
   - nếu còn ít nhất một policy bắt buộc chưa được tick → disable button **Xác nhận/Đồng ý**;
   - nếu toàn bộ policy bắt buộc đã được tick → enable button **Xác nhận/Đồng ý**.
@@ -526,7 +551,7 @@ Khi khách hàng nhấn **Xác nhận/Đồng ý** → chuyển Bước 8.
 
 ##### Bước 8 - Imuzik FE: Gọi API lưu Consent
 
-FE gửi danh sách policy khách hàng đã Consent về Imuzik BE.
+FE gửi nhóm tuổi và danh sách policy khách hàng đã Consent về Imuzik BE.
 
 **API**
 
@@ -549,8 +574,10 @@ POST policy/policy
 |---|---:|---|---|
 | `token` | Có | API `authenticate/index` | Xác định user/MSISDN |
 | `authorization_code` | Không | Cơ chế authorization hiện tại | Giữ theo contract API hiện tại |
-| `type` | Có | Giá trị khách hàng chọn tại Bước 4 | Phải cùng nhóm tuổi đã dùng để lấy Văn bản Consent |
+| `type` | Có | Giá trị khách hàng chọn tại Bước 4 | Phải cùng nhóm tuổi đã dùng để gọi `GET policy/list-policy` |
 | `policy_id` | Có | Danh sách policy khách hàng đã tick | Danh sách `policy.id`, phân tách bằng dấu `,` |
+
+FE không truyền `policy_version`; BE lấy `current_policy_version` từ `CONSENT_CONFIG` khi xử lý lưu Consent.
 
 ##### Bước 9 - Imuzik BE: Validate thông tin Consent
 
@@ -566,10 +593,13 @@ Sau khi nhận request `POST policy/policy`, Imuzik BE thực hiện:
 6. Kiểm tra toàn bộ policy bắt buộc có trong danh sách `policy_id` khách hàng gửi lên:
    - Nếu đầy đủ → tiếp tục Bước 10.
    - Nếu thiếu ít nhất một policy bắt buộc → trả lỗi cho FE, không gọi CM.
+7. Lấy bản ghi `CONSENT_CONFIG` đang `is_current=1` và `status=active` để xác định `current_policy_version` sử dụng khi ghi `log_privacy_policy`.
+
+**Lưu ý:** `type` được lưu cùng `policy_version` tại `log_privacy_policy`, qua đó xác định Phụ lục khách hàng đã được hiển thị/xác nhận tại thời điểm Consent.
 
 ##### Bước 10 - Imuzik BE: Gọi CM lưu Consent
 
-Sau khi validate thành công, Imuzik BE lấy thông tin các policy đang active và build `custPolicyDTO`.
+Sau khi validate thành công, Imuzik BE lấy thông tin policy và build `custPolicyDTO` đủ 06 field CM.
 
 **Nguyên tắc mapping**
 
@@ -631,7 +661,7 @@ Imuzik BE insert/update thông tin Consent local khi:
 | `isdn` | MSISDN của user |
 | `confirm_ids` | Danh sách `policy.id` khách hàng đã Consent |
 | `is_consent` | `1` |
-| `type` | Nhóm tuổi khách hàng đã chọn |
+| `type` | Nhóm tuổi khách hàng đã chọn; đồng thời xác định Phụ lục đã hiển thị |
 | `policy_version` | `current_policy_version` tại thời điểm Consent |
 | `created_at` | Thời điểm tạo bản ghi |
 | `updated_at` | Thời điểm cập nhật bản ghi |
@@ -672,23 +702,24 @@ Nếu API trả lỗi:
 
 | STT | Thành phần | Loại dữ liệu | Nguồn | Mặc định | Mô tả |
 |---:|---|---|---|---|---|
-| 1 | 16 tuổi trở lên | Radio/Option | Người dùng chọn | Chưa chọn | Lưu vào log local |
-| 2 | Dưới 16 tuổi | Radio/Option | Người dùng chọn | Chưa chọn | Không yêu cầu nhập thông tin giám hộ trong v0.20 |
+| 1 | 16 tuổi trở lên | Radio/Option | Người dùng chọn | Chưa chọn | `type=0`; dùng để xác định Phụ lục tương ứng |
+| 2 | Dưới 16 tuổi | Radio/Option | Người dùng chọn | Chưa chọn | `type=1`; không yêu cầu nhập thông tin giám hộ trong v0.21 |
 | 3 | Tiếp tục | Button | Trạng thái lựa chọn | Disable | Enable khi đã chọn một nhóm tuổi |
 
 **MH02 - Popup/Văn bản Consent**
 
 | STT | Thành phần | Loại dữ liệu | Nguồn | Mặc định | Mô tả |
 |---:|---|---|---|---|---|
-| 1 | Nội dung Văn bản Consent | Text/WebView/HTML theo triển khai hiện tại | Imuzik | Theo version hiện hành | Không làm CMS trong v0.20 |
-| 2 | Điều khoản 1 | Checkbox/Readonly state | DB + mapping `provideProduct` | Theo DB | Không cho người dùng sửa |
-| 3 | Điều khoản 2 | Checkbox/Readonly state | DB + mapping `supportCustomer` | Theo DB | Không cho người dùng sửa |
-| 4 | Điều khoản 3 | Checkbox | `improveQuality` | Theo dữ liệu CM/DB | Editable theo DB |
-| 5 | Điều khoản 4 | Checkbox | `marketingAdvertising` | Theo dữ liệu CM/DB | Editable theo DB |
-| 6 | Điều khoản 5 | Checkbox | `researchMarket` | Theo dữ liệu CM/DB | Editable theo DB |
-| 7 | Điều khoản 6 | Checkbox | `tradePromotion` | Theo dữ liệu CM/DB | Editable theo DB |
-| 8 | Xác nhận/Tiếp tục | Button | `is_required` | Disable nếu còn policy bắt buộc chưa Consent | Khi bấm, FE gửi lựa chọn sang BE để validate và lưu CM |
-| 9 | Thông báo lỗi | Message | BE/CM | Không có | Hiển thị khi chưa đủ điều khoản hoặc lưu CM thất bại |
+| 1 | Nội dung Văn bản Consent | HTML/WebView | `CONSENT_CONFIG.document_content` | Theo version hiện hành | 01 Văn bản dùng chung cho cả 02 nhóm tuổi |
+| 2 | Nội dung Phụ lục | HTML/WebView | `CONSENT_CONFIG` + `type` | Theo nhóm tuổi đã chọn | FE nhận trực tiếp `appendix_content` từ BE; không tự chọn Phụ lục |
+| 3 | Điều khoản 1 | Checkbox | `policy` / `provideProduct` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 4 | Điều khoản 2 | Checkbox | `policy` / `supportCustomer` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 5 | Điều khoản 3 | Checkbox | `policy` / `improveQuality` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 6 | Điều khoản 4 | Checkbox | `policy` / `marketingAdvertising` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 7 | Điều khoản 5 | Checkbox | `policy` / `researchMarket` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 8 | Điều khoản 6 | Checkbox | `policy` / `tradePromotion` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
+| 9 | Xác nhận/Tiếp tục | Button | `is_required` | Disable nếu còn policy bắt buộc chưa Consent | Khi bấm, FE gửi `type` + danh sách `policy_id` sang BE để validate và lưu CM |
+| 10 | Thông báo lỗi | Message | Imuzik BE | Không có | Hiển thị khi request/validation/lưu Consent thất bại |
 
 #### 3.1.5 Business Rules
 
@@ -697,24 +728,25 @@ Nếu API trả lỗi:
 | BR01 | CM chỉ được sử dụng như nguồn lưu và trả dữ liệu Consent; Imuzik tự quyết định nghiệp vụ hiển thị/chặn | Không phụ thuộc `consent`/`displayConsent` CM |
 | BR02 | `is_required` là rule duy nhất xác định policy khách hàng phải Consent để được đi tiếp | Không còn `is_required_display` |
 | BR03 | Nếu `getCustPolicy` trả `code=0` nhưng `custPolicyDTO` không có dữ liệu thì không công nhận đã Consent | Chuyển luồng hiển thị popup |
-| BR04 | Điều khoản 1 và 2 không cho phép người dùng chỉnh sửa trên UI | Theo Round 1 |
-| BR05 | Điều khoản 3-6 bắt buộc/tùy chọn theo cấu hình DB Imuzik | Không phụ thuộc config CM |
+| BR04 | Imuzik chỉ quản lý 01 Văn bản Consent chính cho mỗi `policy_version`; nội dung lưu dạng HTML tại `CONSENT_CONFIG.document_content` | Văn bản dùng chung cho cả 02 nhóm tuổi |
+| BR05 | Mỗi `policy_version` có 02 Phụ lục HTML theo nhóm tuổi; `type=0` dùng `appendix_type_0_content`, `type=1` dùng `appendix_type_1_content` | BE chỉ trả `appendix_content` tương ứng `type` cho FE |
 | BR06 | Chỉ cho phép hoàn tất popup khi toàn bộ policy active có `is_required=1` đã được Consent | Nếu không đạt thì chặn đăng nhập |
 | BR07 | Ưu tiên `log_privacy_policy`: nếu local log cùng `current_policy_version` → `is_update=false`; nếu chưa có log hoặc khác version mới gọi CM để kiểm tra | Không đối chiếu lại `confirm_ids` khi local đã cùng version |
-| BR08 | `consent`, `displayConsent` và `systemType` của CM không dùng để quyết định nghiệp vụ trong v0.20 | `systemType` chờ tài liệu CM bổ sung |
+| BR08 | `consent`, `displayConsent` và `systemType` của CM không dùng để quyết định nghiệp vụ trong v0.21 | Imuzik tự quyết định theo DB local + 06 field CM |
 | BR09 | Khi chưa có local log và `custPolicyDTO` có dữ liệu, Consent từ dịch vụ khác có thể được công nhận nếu toàn bộ field CM tương ứng policy active có `is_required=1` đều đã Consent | Chưa tự quy đổi CM `createDatetime` thành `policy_version` Imuzik |
-| BR10 | Văn bản Consent và version do từng dịch vụ quản lý riêng | Imuzik chỉ quản lý version của Imuzik |
+| BR10 | Văn bản Consent, Phụ lục và version do từng dịch vụ quản lý riêng | Imuzik chỉ quản lý version/nội dung của Imuzik |
 | BR11 | Imuzik quản lý `current_policy_version` local; CM không lưu `policyVersion` | Cơ chế tham khảo MyClip |
 | BR12 | Nhóm tuổi do người dùng tự chọn; chỉ lưu local Imuzik | Không lưu CM |
-| BR13 | Người dưới 16 tuổi trong v0.20 chỉ khác nhánh nội dung/option; không thu thập định danh người giám hộ | Theo Round 1 |
-| BR14 | Khi khách hàng submit Consent hợp lệ, BE ưu tiên SAVE CM; nếu CM timeout/lỗi server/lỗi kết nối sau 3 lần retry thì vẫn ghi `log_privacy_policy` local và cho phép tiếp tục đăng nhập | Tham chiếu xử lý MyClip; chưa có cơ chế pending/resync trong v0.20 |
-| BR15 | `GET policy/list-policy` phải trả `is_required` và `is_editable`; FE dùng `is_required` cho điều kiện đi tiếp, `is_editable` cho trạng thái mặc định tick; BE validate lại `is_required` khi submit | Không hard-code danh sách policy bắt buộc trên FE |
+| BR13 | Người dưới 16 tuổi trong v0.21 chỉ khác Phụ lục hiển thị; không thu thập/xác minh định danh người giám hộ | Theo phạm vi đã chốt |
+| BR14 | Khi khách hàng submit Consent hợp lệ, BE ưu tiên SAVE CM; nếu CM timeout/lỗi server/lỗi kết nối sau 3 lần retry thì vẫn ghi `log_privacy_policy` local và cho phép tiếp tục đăng nhập | Chưa có cơ chế pending/resync trong v0.21 |
+| BR15 | `GET policy/list-policy` trả `document_content`, `appendix_content`, danh sách policy có `is_required`, `is_editable`; FE dùng `is_required` cho điều kiện đi tiếp và `is_editable` cho trạng thái mặc định tick | FE không hard-code danh sách policy bắt buộc, không tự chọn Phụ lục |
 | BR15.1 | `policy.name` của 06 policy phải chứa đúng key CM; `sortorder` xác định thứ tự Điều khoản 1-6 | Không dùng `policy.id` hoặc vị trí response để suy ra mapping CM |
+| BR15.2 | `is_editable` chỉ xác định trạng thái tick mặc định theo chốt Dev; không dùng để suy ra quyền khóa/mở checkbox | Tên field legacy nhưng semantics nghiệp vụ theo tài liệu này |
 | BR16 | Không gọi `getCustPolicy` lần 2 ngay trước `updateCustPolicy`; nếu check-policy không cần gọi CM do đã có local log thì cũng không phát sinh GET chỉ để SAVE | Chấp nhận rủi ro concurrent update thấp trong phạm vi hiện tại |
 | BR16.1 | `getCustPolicy`: `code!=0` → `/check-policy` trả success, `is_update=true`; timeout/lỗi server sau 3 retry → `/check-policy` trả success, `is_update=false`. `updateCustPolicy` timeout/lỗi server sau 3 retry → vẫn ghi `log_privacy_policy` local | `code!=0` có response và timeout/lỗi kỹ thuật là hai nhánh xử lý khác nhau |
-| BR17 | Local log Consent được cập nhật/ghi đè bản hiện hành tương tự MyClip | Chưa yêu cầu lưu lịch sử đầy đủ |
-| BR18 | Phạm vi kênh v0.20: Web, Wapsite, App Imuzik; đăng nhập bằng SĐT | Không Google/Facebook, không kênh khác |
-| BR19 | Chức năng thay đổi/rút Consent sau đăng nhập chưa thuộc phạm vi v0.20 | Cần làm rõ vòng sau |
+| BR17 | Local log Consent được cập nhật/ghi đè bản hiện hành tương tự MyClip | `type + policy_version` xác định nhóm Phụ lục đã hiển thị tại thời điểm Consent; chưa yêu cầu lưu lịch sử đầy đủ |
+| BR18 | Phạm vi kênh v0.21: Web, Wapsite, App Imuzik; đăng nhập bằng SĐT | Không Google/Facebook, không kênh khác |
+| BR19 | Chức năng thay đổi/rút Consent sau đăng nhập chưa thuộc phạm vi v0.21 | Cần làm rõ vòng sau |
 
 ## 4. Yêu cầu tích hợp và dữ liệu
 
@@ -740,10 +772,10 @@ Chốt với Dev: **không bổ sung `policy_key`**. Sử dụng trực tiếp c
 
 #### 4.1.1 Phạm vi thiết kế DB tại phiên bản này
 
-Phương án v0.20 theo hướng:
+Phương án v0.21 theo hướng:
 
 1. **Reuse bảng `policy` hiện tại** - sử dụng `name`, `is_required`, `is_editable`, `is_active`, `sortorder` cho 06 mục đích Consent.
-2. **Đề xuất bổ sung `CONSENT_CONFIG`** - quản lý `policy_version`, trạng thái current/active và nguồn Văn bản Consent theo nhóm tuổi; cấu trúc chi tiết cần Dev/DBA rà soát trước khi chốt DDL.
+2. **Đề xuất bổ sung `CONSENT_CONFIG`** - quản lý `policy_version`, 01 Văn bản Consent HTML dùng chung, 02 Phụ lục HTML theo `type`, trạng thái current/active; cấu trúc chi tiết cần Dev/DBA rà soát trước khi chốt DDL.
 3. **Đề xuất bổ sung `log_privacy_policy`** - lưu snapshot Consent local của user, tham chiếu cách MyClip đang lưu.
 4. Không tạo `CONSENT_POLICY` riêng; không bổ sung `policy_key`; không sử dụng `is_required_display`.
 
@@ -782,24 +814,30 @@ Bảng `policy` hiện tại tiếp tục là nguồn cấu hình 06 mục đíc
 
 #### 4.1.3 Đề xuất bảng `CONSENT_CONFIG`
 
-Bảng này dùng để quản lý version Consent hiện hành và Văn bản Consent theo nhóm tuổi. Cấu trúc dưới đây là logical design, Dev/DBA cần rà soát schema/config hiện tại trước khi chốt vật lý.
+Bảng này dùng để quản lý version và nội dung Consent hiện hành của Imuzik. Mỗi version gồm **01 Văn bản Consent HTML dùng chung** và **02 Phụ lục HTML tương ứng 02 nhóm tuổi**. Cấu trúc dưới đây là logical design, Dev/DBA cần rà soát schema/config hiện tại trước khi chốt vật lý.
 
 | Field logical | Mô tả |
 |---|---|
 | `id` | Định danh cấu hình |
-| `policy_version` | Version Văn bản Consent |
-| `document_type_0` | Văn bản Consent áp dụng cho nhóm từ 16 tuổi trở lên |
-| `document_type_1` | Văn bản Consent áp dụng cho nhóm dưới 16 tuổi |
+| `policy_version` | Version Văn bản Consent/Phụ lục |
+| `document_content` | Nội dung 01 Văn bản Consent chính, lưu dạng HTML; dùng chung cho cả `type=0` và `type=1` |
+| `appendix_type_0_content` | Nội dung Phụ lục HTML áp dụng cho nhóm từ 16 tuổi trở lên (`type=0`) |
+| `appendix_type_1_content` | Nội dung Phụ lục HTML áp dụng cho nhóm dưới 16 tuổi (`type=1`) |
 | `is_current` | `1`: version hiện hành |
-| `status` | Trạng thái cấu hình, trong luồng hiện tại sử dụng bản ghi `active` |
+| `status` | Trạng thái cấu hình; trong luồng hiện tại sử dụng bản ghi `active` |
 | `created_at`, `updated_at` | Thời điểm tạo/cập nhật |
 
 **Rule**
 
-- `GET policy/check-policy` lấy `current_policy_version` từ bản ghi đang `is_current=1` và `status=active`.
-- `GET policy/list-policy` dùng `type` để lấy đúng Văn bản Consent trong bản ghi current tương ứng.
-- Nếu không tồn tại cấu hình current/active hoặc lỗi truy vấn → xử lý lỗi hệ thống `000001` tại `GET policy/check-policy`.
-- Tên field lưu document ở trên là logical; DDL, unique/index và cách lưu file/text: **Cần Dev/DBA chốt**.
+- Luồng nghiệp vụ sử dụng 01 bản ghi `CONSENT_CONFIG` đang `is_current=1` và `status=active` làm cấu hình hiện hành.
+- `GET policy/check-policy` chỉ cần lấy `policy_version` để xác định `current_policy_version`.
+- `GET policy/list-policy` lấy `document_content` dùng chung và căn cứ `type` để chọn đúng Phụ lục:
+  - `type=0` → `appendix_type_0_content`;
+  - `type=1` → `appendix_type_1_content`.
+- BE trả Phụ lục đã chọn cho FE dưới field `appendix_content`; FE không tự đọc cả 02 Phụ lục hoặc tự chọn theo index.
+- Nội dung Văn bản/Phụ lục được lưu dạng HTML trong DB, không sử dụng `file_url`/path file trong phương án hiện tại.
+- Nếu không tồn tại cấu hình current/active hoặc lỗi truy vấn → xử lý lỗi hệ thống `000001` tại `GET policy/check-policy`; các API đọc cấu hình khác xử lý theo cùng convention lỗi hệ thống hiện tại.
+- DDL, kiểu dữ liệu HTML, unique/index và cơ chế cache/invalidate cấu hình: **Cần Dev/DBA chốt**.
 
 #### 4.1.4 Logical table `log_privacy_policy` - Snapshot Consent local
 
@@ -829,7 +867,7 @@ Cấu trúc bám theo MyClip ở các trường cốt lõi: user, ISDN, danh sá
 
 ```text
 CONSENT_CONFIG
-  └─ policy_version + type + Văn bản Consent + current/status
+  └─ policy_version + document_content + appendix_type_0_content + appendix_type_1_content + current/status
 
 policy (existing)
   └─ 06 policy + name(CM key) + is_required + is_editable + sortorder
@@ -842,7 +880,7 @@ log_privacy_policy
 
 #### 4.2.1 `GET policy/check-policy`
 
-| Thuộc tính | Nội dung v0.20 |
+| Thuộc tính | Nội dung v0.21 |
 |---|---|
 | Mục đích | Quyết định FE có cần hiển thị popup Consent |
 | Auth | `token` bắt buộc; `authorization_code` optional theo contract hiện tại |
@@ -859,30 +897,32 @@ log_privacy_policy
 
 #### 4.2.2 `GET policy/list-policy`
 
-| Thuộc tính | Nội dung v0.20 |
+| Thuộc tính | Nội dung v0.21 |
 |---|---|
-| Mục đích | Trả đúng Văn bản Consent và danh sách 06 mục đích xử lý dữ liệu theo nhóm tuổi đã xác nhận |
+| Mục đích | Trả 01 Văn bản Consent dùng chung, Phụ lục tương ứng nhóm tuổi và danh sách 06 mục đích xử lý dữ liệu |
 | Auth | `token` required; `authorization_code` optional |
 | Input bắt buộc mới | `type`: `0` = từ 16 tuổi trở lên; `1` = dưới 16 tuổi |
-| Validate | Thiếu/sai `type` thì không trả mặc định một bộ policy; mã lỗi theo convention API Imuzik cần Dev chốt |
-| Nguồn Văn bản Consent | Cấu hình DB theo `current_policy_version + type`; cấu trúc vật lý lưu nội dung/file chưa chốt |
+| Validate | Thiếu/sai `type` thì không tự chọn mặc định Phụ lục; mã lỗi validate cần Dev chốt theo convention API Imuzik |
+| Nguồn Văn bản Consent | `CONSENT_CONFIG.document_content` của bản ghi current/active; lưu HTML trong DB |
+| Nguồn Phụ lục | `type=0` → `CONSENT_CONFIG.appendix_type_0_content`; `type=1` → `CONSENT_CONFIG.appendix_type_1_content` |
 | Nguồn policy/description | Bảng `policy` hiện tại, chỉ lấy bản ghi `is_active=1` |
 | `is_required` | Rule duy nhất xác định policy khách hàng bắt buộc Consent để được đi tiếp |
-| Bắt buộc trả thêm | `is_editable` và metadata Văn bản Consent; FE dùng `is_required` cho điều kiện đi tiếp và `is_editable` cho trạng thái mặc định tick |
+| `is_editable` | Xác định trạng thái mặc định tick trên FE; không dùng để khóa/mở checkbox |
 | Thứ tự | Theo `policy.sortorder` hiện tại |
+| Mapping CM | `policy.name` chỉ dùng nội bộ BE; không bắt buộc trả ra FE |
+| Ảnh hưởng contract | Response hiện tại có `data` là array policy; response mới chuyển `data` thành object chứa Văn bản/Phụ lục/`policies` → FE/BE phải cập nhật đồng bộ |
 
-**Response đề xuất backward-compatible:**
+**Response đề xuất:**
 
 ```json
 {
   "errorCode": "000000",
   "message": "Successful",
   "data": {
+    "policy_version": "<current_policy_version>",
     "type": 0,
-    "policy_document": {
-      "version": "<current_policy_version>",
-      "file": "<Thông tin file/URL/path - Dev chốt contract>"
-    },
+    "document_content": "<HTML Văn bản Consent>",
+    "appendix_content": "<HTML Phụ lục tương ứng type>",
     "policies": [
       {
         "id": 1,
@@ -897,7 +937,7 @@ log_privacy_policy
 
 #### 4.2.3 `POST policy/policy`
 
-| Thuộc tính | Nội dung v0.20 |
+| Thuộc tính | Nội dung v0.21 |
 |---|---|
 | Mục đích | Xác nhận và lưu Consent |
 | Auth | `token` required; `authorization_code` optional |
@@ -940,32 +980,35 @@ Các mã lỗi validation hiện tại (`000001`, `000002`, `000003`, `000008`, 
 
 - `policy` là bảng **hiện có** của Imuzik và được reuse; không tạo `CONSENT_POLICY` riêng.
 - `log_privacy_policy` là bảng local log đề xuất bổ sung mới theo hướng MyClip.
-- Đề xuất bổ sung `CONSENT_CONFIG` để quản lý `current_policy_version`, trạng thái current/active và Văn bản Consent theo `type`; cấu trúc vật lý cần Dev/DBA rà soát trước khi chốt.
-- Dữ liệu `policy.name` của 06 policy phải được cập nhật đúng 06 key CM; DDL/index của `CONSENT_CONFIG`, `log_privacy_policy` và cơ chế lưu nội dung file/text: **Cần Dev/DBA cập nhật sau**.
+- `CONSENT_CONFIG` là bảng cấu hình đề xuất bổ sung: mỗi version lưu 01 `document_content` HTML dùng chung và 02 nội dung Phụ lục HTML theo `type`.
+- `GET policy/list-policy` chỉ trả 01 `appendix_content` tương ứng `type` khách hàng đã chọn; FE không nhận cả 02 Phụ lục để tự xử lý.
+- Dữ liệu `policy.name` của 06 policy phải được cập nhật đúng 06 key CM.
+- DDL/index, kiểu dữ liệu lưu HTML, giới hạn kích thước nội dung và cơ chế cache/invalidate của `CONSENT_CONFIG`, `log_privacy_policy`: **Cần Dev/DBA cập nhật sau**.
 - Nếu sau này cần lưu lịch sử nhiều bộ policy theo version hoặc quản trị độc lập document/policy, có thể tách thêm bảng mapping/version ở phase mở rộng.
 
 ## 5. Ràng buộc và vấn đề tồn đọng
 
 | Loại | Mô tả | Ghi chú/Mức độ ảnh hưởng |
 |---|---|---|
-| Cần làm rõ | Chưa có tài liệu/flow chính thức của Viettel.vn để đối chiếu | Không tự suy diễn rule Viettel.vn trong v0.20 |
+| Cần làm rõ | Chưa có tài liệu/flow chính thức của Viettel.vn để đối chiếu | Không tự suy diễn rule Viettel.vn trong v0.21 |
 | Cần làm rõ | Khi chưa có local log nhưng CM đáp ứng đủ toàn bộ policy `is_required=1`, có tạo `log_privacy_policy` ngay hay chỉ bỏ popup cho phiên hiện tại | Không tự gán `policy_version=current_policy_version` nếu chưa chốt rule này |
 | Đã chốt phương án | Xử lý `getCustPolicy` và retry/fallback CM | `getCustPolicy code!=0` → `/check-policy` trả `is_update=true`; timeout/lỗi server sau 3 retry → `is_update=false`; `updateCustPolicy` timeout/lỗi server sau 3 retry → vẫn lưu `log_privacy_policy` local |
 | Cần làm rõ | Đồng bộ bù CM sau khi `updateCustPolicy` thất bại nhưng local log đã lưu | Nếu không có cơ chế resync, local current version có thể khiến các lần login sau không gọi lại CM |
 | Cần làm rõ | Xử lý khi local đã có log nhưng `policy_version != current_policy_version` | Tạm thời chưa dùng `createDatetime` CM để tự nâng version local |
-| Cần làm rõ | Chức năng xem lại/thay đổi/rút Consent sau đăng nhập | Chưa thuộc scope v0.20 |
+| Cần làm rõ | Chức năng xem lại/thay đổi/rút Consent sau đăng nhập | Chưa thuộc scope v0.21 |
 | Đã chốt phương án | Reuse bảng `policy` hiện tại; không tạo `CONSENT_POLICY` riêng | Đề xuất bổ sung `CONSENT_CONFIG` và `log_privacy_policy`; cấu trúc vật lý cần Dev/DBA rà soát/chốt |
-| Cần Dev/DBA chốt | DDL/unique/index của `CONSENT_CONFIG`, kiểu dữ liệu/format `policy_version`, cấu trúc lưu Văn bản Consent và thời điểm hiệu lực nếu cần | Dữ liệu được quản lý trên DB; không có file config/CMS |
+| Đã chốt phương án | `CONSENT_CONFIG` quản lý 01 Văn bản Consent HTML dùng chung và 02 Phụ lục HTML theo `type` | `GET policy/list-policy` trả `document_content` + đúng 01 `appendix_content` theo nhóm tuổi |
+| Cần Dev/DBA chốt | DDL/unique/index của `CONSENT_CONFIG`, kiểu dữ liệu/giới hạn kích thước HTML và cơ chế cache/invalidate | Dữ liệu được quản lý trên DB; không dùng file URL/path trong phương án hiện tại |
+| Cần làm rõ | Trong khoảng thời gian giữa `GET policy/list-policy` và `POST policy/policy`, nếu `current_policy_version` thay đổi thì xử lý như nào | Hiện FE không gửi `policy_version`; có rủi ro user xem version cũ nhưng BE ghi log theo version mới nếu cấu hình đổi đúng thời điểm submit |
 | Ràng buộc bị ghi đè | Rule cũ `created_at < 01/07/2023 => không hiển thị popup` không còn áp dụng | Quyết định theo CM + cấu hình DB + version mới |
 | Ràng buộc bị ghi đè | `vt_member.is_update_policy=1` không còn được dùng trong logic Consent mới | Field legacy; chỉ giữ nếu module cũ còn phụ thuộc |
 | Cần cập nhật dữ liệu | `policy.description` hiện tại có nội dung cũ, chưa khớp hoàn toàn bộ 06 mục đích mới | Cần update dữ liệu trước Dev/UAT |
-| Cần Dev chốt | Contract vật lý `GET policy/list-policy`: tên field `type`, cấu trúc thông tin file Văn bản Consent; `POST policy/policy` tiếp tục giữ `policy_id` | Ảnh hưởng contract FE-BE; nghiệp vụ đã chốt phải chọn nhóm tuổi trước `list-policy` |
+| Cần Dev chốt | Contract mới `GET policy/list-policy` đổi `data` từ array policy thành object chứa `document_content`, `appendix_content`, `policies`; `POST policy/policy` tiếp tục giữ `policy_id` | Đây là thay đổi contract FE-BE, cần release FE/BE đồng bộ |
 | Cần Dev/DBA chốt | Ràng buộc dữ liệu để bảo đảm 06 `policy.name` đúng key CM, `sortorder` đúng 1-6 và DDL/index/unique của `CONSENT_CONFIG`, `log_privacy_policy` | Không thay đổi ý nghĩa nghiệp vụ đã chốt |
 | Rủi ro | Nhiều dịch vụ cùng cập nhật 06 field trên CM có thể ghi đè lựa chọn của nhau | **Chấp nhận trong phạm vi hiện tại**; không gọi GET CM lần 2 trước SAVE. Nếu cần kiểm soát concurrent update chặt hơn thì CM phải bổ sung version/ETag/compare-and-swap |
-| Rủi ro | `createDatetime` của CM không chứng minh trực tiếp version Văn bản Consent Imuzik | Vì vậy v0.20 chưa dùng timestamp này để tự nâng `policy_version` local |
-| Ràng buộc | CM không thay đổi để phục vụ riêng Imuzik trong v0.20 | Không thêm systemCode/policyVersion |
+| Rủi ro | `createDatetime` của CM không chứng minh trực tiếp version Văn bản Consent Imuzik | Vì vậy v0.21 chưa dùng timestamp này để tự nâng `policy_version` local |
+| Ràng buộc | CM không thay đổi để phục vụ riêng Imuzik trong v0.21 | Không thêm systemCode/policyVersion |
 | Ràng buộc | Imuzik không phụ thuộc `consent`/`displayConsent` do CM tính | Rule nằm tại cấu hình DB Imuzik |
-| Ràng buộc | Toàn bộ rule/version/ngày hiệu lực Consent lấy từ DB Imuzik, không dùng file config | Thay đổi cấu hình nghiệp vụ không yêu cầu sửa file deploy |
+| Ràng buộc | Toàn bộ rule/version/nội dung Văn bản/Phụ lục Consent lấy từ DB Imuzik, không dùng file config | Thay đổi cấu hình nghiệp vụ không yêu cầu sửa file deploy |
 | Ràng buộc | Khi SAVE CM timeout/lỗi server sau 3 retry, Imuzik vẫn ghi `log_privacy_policy` local và cho phép tiếp tục đăng nhập | Chưa có pending/resync; cần đánh giá cơ chế đồng bộ bù CM nếu yêu cầu đồng bộ cuối cùng |
-| Ràng buộc | Điều khoản 1 và 2 không cho người dùng chỉnh sửa trên UI | Giá trị nghiệp vụ theo DB/CM, UI ở trạng thái locked |
-
+| Ràng buộc | `is_editable` chỉ xác định trạng thái tick mặc định | Không dùng field này để suy ra quyền chỉnh sửa/khóa checkbox |
