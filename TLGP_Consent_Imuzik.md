@@ -7,17 +7,18 @@ Biểu mẫu rút gọn - áp dụng cho yêu cầu thay đổi/nâng cấp ch�
 | Thông tin | Nội dung |
 |---|---|
 | Tên yêu cầu / dự án | Cập nhật và quản lý Consent khách hàng trên Imuzik |
-| Phiên bản | 1.1 |
+| Phiên bản | 1.2 |
 | Ngày ban hành | 05/10/2026 |
 | PIC | SơnLH21 |
-| Trạng thái | Baseline phát triển - cập nhật sau review Dev |
+| Trạng thái | Baseline phát triển |
 
 ## 1. Lịch sử thay đổi
 
 | Ngày | Phiên bản | PIC | Phạm vi thay đổi | Mô tả |
 |---|---|---|---|---|
 | 05/10/2026 | 1.0 | SơnLH21 | Toàn bộ tài liệu | Ban hành baseline giải pháp Consent Imuzik để triển khai FE/BE/DB và tích hợp CM |
-| 05/10/2026 | 1.1 | SơnLH21 | Mục 2-5 | Cập nhật sau review Dev: chuẩn hóa mã lỗi; phân tách xác thực App và Web/Wap; cập nhật popup nhóm tuổi theo design; bổ sung menu xem lại chính sách; chốt `log_privacy_policy` tại DB `imuzik`; chuẩn hóa cấu trúc Phụ lục dạng JSON string |
+| 05/10/2026 | 1.1 | SơnLH21 | Mục 2-5 | Cập nhật sau review Dev: chuẩn hóa mã lỗi; cập nhật popup nhóm tuổi theo design; bổ sung menu xem lại chính sách; chốt `log_privacy_policy` tại DB `imuzik`; chuẩn hóa cấu trúc Phụ lục dạng JSON string |
+| 05/10/2026 | 1.2 | SơnLH21 | Mục 2-5 | Chuẩn hóa tài liệu theo một luồng API dùng `token`; loại bỏ mô tả tách riêng cơ chế Web/Wap. Biến thể Web/Wap sẽ được Dev clone/điều chỉnh ở bản triển khai riêng |
 
 ## 2. Thông tin tổng quan
 
@@ -32,7 +33,6 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 - Trạng thái Consent local được quản lý tại `log_privacy_policy`; không sử dụng `vt_member.is_update_policy`/`vt_member.policy_id` làm source of truth cho luồng mới.
 - Văn bản Consent gồm 01 nội dung HTML dùng chung và 02 Phụ lục tương ứng nhóm tuổi; mỗi Phụ lục được lưu dưới dạng JSON string.
 - Khách hàng tự xác nhận nhóm tuổi bằng các button trên popup **Xác minh người dùng** trước khi tải nội dung Consent.
-- App thực hiện kiểm tra Consent qua API bằng `token`; Web/Wap sử dụng session, thực hiện kiểm tra một lần ngay sau đăng nhập và layout chỉ đọc kết quả trong session.
 - Bổ sung điểm truy cập trên menu để khách hàng xem lại chính sách đã Consent; `GET policy/check-policy` trả thêm `type` và danh sách policy đã Consent để phục vụ hiển thị.
 - Imuzik quyết định việc hiển thị popup/cho phép tiếp tục đăng nhập; không sử dụng `consent`, `displayConsent`, `systemType` của CM để quyết định nghiệp vụ.
 
@@ -40,11 +40,9 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 
 **Trong phạm vi**
 
-- Web, Wapsite và App Imuzik.
+- App Imuzik - luồng API chuẩn sử dụng `token`.
 - Đăng nhập bằng số điện thoại.
-- Kiểm tra có cần Consent khi đăng nhập:
-  - App: FE gọi `GET policy/check-policy` bằng `token` sau khi đăng nhập thành công.
-  - Web/Wap: BE thực hiện logic kiểm tra một lần ngay sau đăng nhập, lưu kết quả vào session; layout không gọi/retry API `check-policy` bằng token.
+- Kiểm tra có cần Consent sau khi đăng nhập bằng `GET policy/check-policy`.
 - Chọn nhóm tuổi: `type=0` từ 16 tuổi trở lên; `type=1` dưới 16 tuổi.
 - Button **Không phải bây giờ** tại popup xác minh người dùng: thực hiện logout và quay lại màn hình đăng nhập.
 - Hiển thị Văn bản Consent, Phụ lục theo nhóm tuổi và danh sách 06 điều khoản.
@@ -54,7 +52,8 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 
 **Ngoài phạm vi**
 
-- Đăng nhập Google/Facebook và các kênh ngoài Web/Wap/App Imuzik.
+- Đăng nhập Google/Facebook.
+- Biến thể triển khai Web/Wap; Dev clone/điều chỉnh từ luồng chuẩn ở bản triển khai riêng.
 - CMS quản trị Văn bản Consent/Phụ lục.
 - Thu thập hoặc xác minh thông tin người giám hộ cho khách hàng dưới 16 tuổi.
 - Chức năng thay đổi hoặc rút Consent sau khi đăng nhập.
@@ -64,7 +63,7 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 
 | STT | Thuật ngữ | Mô tả |
 |---:|---|---|
-| 1 | Imuzik FE | Frontend Website/Wapsite/App Imuzik |
+| 1 | Imuzik FE | Frontend App Imuzik |
 | 2 | Imuzik BE | Backend Imuzik xử lý nghiệp vụ Consent |
 | 3 | CM | Hệ thống quản lý tập trung dữ liệu Consent |
 | 4 | Consent | Xác nhận/lựa chọn của khách hàng đối với các mục đích xử lý dữ liệu cá nhân |
@@ -73,7 +72,6 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 | 7 | Policy bắt buộc | Policy active có `is_required=1`; khách hàng bắt buộc Consent để được tiếp tục |
 | 8 | `policy.name` | Key nghiệp vụ/tích hợp tương ứng trực tiếp với 06 field Consent của CM |
 | 9 | `type` | Nhóm tuổi: `0` từ 16 tuổi trở lên; `1` dưới 16 tuổi |
-| 10 | Session Web/Wap | Phiên đăng nhập phía Web/Wap dùng để lưu trạng thái `is_update` và dữ liệu Consent phục vụ layout/menu |
 
 ### 2.4 Tài liệu tham khảo
 
@@ -90,9 +88,9 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 
 | Thành phần | Xử lý |
 |---|---|
-| `GET policy/check-policy` | Reuse endpoint cho App; response bổ sung `type`, `policy_ids`. Web/Wap không gọi endpoint này bằng token từ layout mà chạy cùng logic kiểm tra ngay sau login và lưu kết quả vào session |
-| `GET policy/list-policy` | Reuse endpoint; bổ sung `type`; App xác thực bằng token, Web/Wap xác thực theo session; trả Văn bản Consent HTML, Phụ lục JSON string theo `type` và danh sách policy active |
-| `POST policy/policy` | Reuse endpoint; bổ sung `type`, `policy_version`; App xác thực bằng token, Web/Wap xác thực theo session; validate version/policy bắt buộc, gọi `updateCustPolicy`, sau đó ghi `log_privacy_policy` |
+| `GET policy/check-policy` | Reuse endpoint; response bổ sung `type`, `policy_ids` để phục vụ quyết định popup và menu xem lại chính sách |
+| `GET policy/list-policy` | Reuse endpoint; bổ sung `type`; xác thực bằng `token`; trả Văn bản Consent HTML, Phụ lục JSON string theo `type` và danh sách policy active |
+| `POST policy/policy` | Reuse endpoint; bổ sung `type`, `policy_version`; xác thực bằng `token`; validate version/policy bắt buộc, gọi `updateCustPolicy`, sau đó ghi `log_privacy_policy` |
 | Popup xác minh người dùng | Cập nhật theo design: 02 button nhóm tuổi và action **Không phải bây giờ**; không có radio/button **Tiếp tục** |
 | Menu Chính sách | Bổ sung điểm truy cập để khách hàng xem lại chính sách đã Consent; không cho phép thay đổi/rút Consent trong phạm vi tài liệu |
 | `policy` | Reuse bảng hiện tại; dùng `name`, `description`, `is_required`, `is_editable`, `is_active`, `sortorder` |
@@ -106,7 +104,6 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 - `is_required` xác định điều khoản bắt buộc; `is_editable` chỉ xác định trạng thái tick mặc định trên FE. Chi tiết xử lý kỹ thuật giá trị field do Dev triển khai theo cấu trúc hiện tại.
 - `CONSENT_CONFIG` có 01 Văn bản Consent HTML dùng chung và 02 Phụ lục theo `type`; mỗi Phụ lục lưu trong một field dưới dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`.
 - BE chọn đúng Phụ lục theo `type` và trả nguyên chuỗi `appendix_content`; FE parse JSON string để render.
-- App dùng `token`; Web/Wap dùng session. Layout Web/Wap chỉ đọc trạng thái Consent từ session, không gọi/retry `GET policy/check-policy`.
 - `GET policy/check-policy` trả thêm `type`, `policy_ids` để phục vụ chức năng xem lại chính sách.
 - `policy_version` trả tại `GET policy/list-policy` phải được FE gửi lại khi `POST policy/policy`; BE kiểm tra version này vẫn là version current trước khi lưu Consent.
 - `policy_version` được xác lập khi INSERT bản ghi `CONSENT_CONFIG` mới; UPDATE bản ghi hiện tại không tự tăng version.
@@ -123,7 +120,7 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 |---|---|
 | Actor chính | Khách hàng đăng nhập Imuzik bằng số điện thoại |
 | Mục đích / Mô tả | Kiểm tra dữ liệu Consent hiện có, đối chiếu với rule/version của Imuzik và yêu cầu khách hàng xác nhận lại khi chưa đáp ứng |
-| Hệ thống thực hiện | Imuzik FE, Imuzik BE, session Web/Wap, DB Imuzik, CM |
+| Hệ thống thực hiện | Imuzik FE, Imuzik BE, DB Imuzik, CM |
 | Trigger | Khách hàng đăng nhập thành công bằng số điện thoại |
 | Điều kiện đầu vào | Imuzik xác định được user/MSISDN; hệ thống đọc được cấu hình Consent hiện hành |
 | Điều kiện đầu ra thành công | Khách hàng đáp ứng rule Consent hiện hành và tiếp tục vào Home |
@@ -139,19 +136,12 @@ sequenceDiagram
     actor KH as Khách hàng
     participant FE as Imuzik FE
     participant BE as Imuzik BE
-    participant SS as Web/Wap Session
     participant DB as DB imuzik
     participant CM as CM Consent API
 
     KH->>FE: Đăng nhập bằng SĐT
-    FE->>BE: Thực hiện đăng nhập
-
-    alt App
-        BE-->>FE: Đăng nhập thành công + token
-        FE->>BE: GET policy/check-policy(token)
-    else Web/Wap
-        BE->>BE: Chạy logic check Consent 1 lần sau login
-    end
+    FE->>BE: authenticate/index -> nhận token
+    FE->>BE: GET policy/check-policy(token)
 
     BE->>DB: Lấy CONSENT_CONFIG current/active
     DB-->>BE: current_policy_version
@@ -159,32 +149,25 @@ sequenceDiagram
 
     alt Có local log cùng current_policy_version
         DB-->>BE: type + confirm_ids
-        BE->>BE: is_update=false
+        BE-->>FE: is_update=false + type + policy_ids
     else Chưa có local log hoặc local khác version
         BE->>CM: getCustPolicy(isdn) - retry tối đa 3 lần khi lỗi kỹ thuật
         alt CM timeout/lỗi server sau 3 lần retry
-            BE->>BE: is_update=false
+            BE-->>FE: is_update=false
         else CM trả code != 0
-            BE->>BE: is_update=true
+            BE-->>FE: is_update=true
         else CM code = 0 nhưng custPolicyDTO rỗng/null
-            BE->>BE: is_update=true
+            BE-->>FE: is_update=true
         else CM code = 0 và custPolicyDTO có dữ liệu
             CM-->>BE: 06 giá trị Consent + createDatetime
             BE->>DB: Lấy policy active có is_required=1
             BE->>BE: So sánh policy.name với field cùng tên trong custPolicyDTO
             alt Tất cả field bắt buộc = 1
-                BE->>BE: is_update=false + mapping policy_ids
+                BE-->>FE: is_update=false + type + policy_ids
             else Có ít nhất một field != 1/không có giá trị
-                BE->>BE: is_update=true
+                BE-->>FE: is_update=true
             end
         end
-    end
-
-    alt App
-        BE-->>FE: is_update + type + policy_ids
-    else Web/Wap
-        BE->>SS: Lưu is_update + type + policy_ids
-        SS-->>FE: Layout đọc trạng thái session
     end
 
     alt is_update=true
@@ -192,11 +175,10 @@ sequenceDiagram
         alt Khách hàng chọn Không phải bây giờ
             KH->>FE: Không phải bây giờ
             FE->>BE: Logout
-            BE->>SS: Xóa session nếu Web/Wap
             BE-->>FE: Quay lại màn hình đăng nhập
         else Khách hàng chọn nhóm tuổi
             KH->>FE: Chọn 16 tuổi trở lên hoặc Dưới 16 tuổi
-            FE->>BE: GET policy/list-policy(type) - App token/Web-Wap session
+            FE->>BE: GET policy/list-policy(token, type)
             BE->>DB: Lấy CONSENT_CONFIG current/active
             DB-->>BE: policy_version + document_content + appendix JSON string
             BE->>DB: Lấy policy is_active=1 ORDER BY sortorder
@@ -204,7 +186,7 @@ sequenceDiagram
             BE-->>FE: document_content + appendix_content + policies
             FE-->>KH: Parse Phụ lục và hiển thị Văn bản + policy
             KH->>FE: Chọn policy và nhấn Xác nhận/Đồng ý
-            FE->>BE: POST policy/policy(type, policy_version, policy_id)
+            FE->>BE: POST policy/policy(token, type, policy_version, policy_id)
             BE->>DB: Validate policy_version + policy active + is_required
             alt Validation không hợp lệ
                 BE-->>FE: Validation error
@@ -218,7 +200,6 @@ sequenceDiagram
                 else CM timeout/lỗi server sau 3 retry
                     BE->>DB: Insert/Update log_privacy_policy theo fallback
                 end
-                BE->>SS: Web/Wap xóa cờ is_update, cập nhật type/policy_ids
                 BE-->>FE: Success
                 FE-->>KH: Đóng popup và tiếp tục vào Home
             end
@@ -234,11 +215,11 @@ sequenceDiagram
 
 | Bước nghiệp vụ | API/DB sử dụng | Xử lý chính | Thay đổi so với hiện trạng |
 |---|---|---|---|
-| Kiểm tra có cần Consent | App: `GET policy/check-policy`; Web/Wap: logic check sau login; `CONSENT_CONFIG`; `log_privacy_policy`; CM `getCustPolicy` | Lấy `current_policy_version` → check local log → chỉ gọi CM khi chưa có log hoặc local khác version → xác định `is_update`, `type`, `policy_ids` | Web/Wap không gọi API bằng token; lưu kết quả vào session để layout sử dụng |
+| Kiểm tra có cần Consent | `GET policy/check-policy`; `CONSENT_CONFIG`; `log_privacy_policy`; CM `getCustPolicy` | Lấy `current_policy_version` → check local log → chỉ gọi CM khi chưa có log hoặc local khác version → xác định `is_update`, `type`, `policy_ids` | Bỏ logic quyết định dựa trên `vt_member.created_at`/`vt_member.is_update_policy` |
 | Chọn nhóm tuổi | Popup **Xác minh người dùng** | KH bấm trực tiếp button `16 tuổi trở lên` hoặc `Dưới 16 tuổi`; bấm **Không phải bây giờ** thì logout | Không dùng radio/button **Tiếp tục** |
-| Lấy Văn bản, Phụ lục và điều khoản | `GET policy/list-policy?type=...`; `CONSENT_CONFIG`; bảng `policy` | Lấy Văn bản HTML → chọn Phụ lục JSON string theo `type` → lấy policy active theo `sortorder` → trả dữ liệu cho FE | FE parse `appendix_content`; App dùng token, Web/Wap dùng session |
-| Xác nhận Consent | `POST policy/policy`; CM `updateCustPolicy`; `log_privacy_policy` | Validate `policy_version` + policy bắt buộc → build 06 field CM → SAVE CM → ghi local log | Không gọi `getCustPolicy` lần 2 trước SAVE; Web/Wap xóa cờ `is_update` trong session khi thành công |
-| Xem lại chính sách | Menu **Chính sách**; dữ liệu `type`, `policy_ids` từ check/session; `GET policy/list-policy` | Hiển thị Văn bản/Phụ lục và các policy đã Consent ở chế độ chỉ xem | Không cho thay đổi/rút Consent trong phạm vi hiện tại |
+| Lấy Văn bản, Phụ lục và điều khoản | `GET policy/list-policy?type=...`; `CONSENT_CONFIG`; bảng `policy` | Lấy Văn bản HTML → chọn Phụ lục JSON string theo `type` → lấy policy active theo `sortorder` → trả dữ liệu cho FE | FE parse `appendix_content` |
+| Xác nhận Consent | `POST policy/policy`; CM `updateCustPolicy`; `log_privacy_policy` | Validate `policy_version` + policy bắt buộc → build 06 field CM → SAVE CM → ghi local log | Không gọi `getCustPolicy` lần 2 trước SAVE |
+| Xem lại chính sách | Menu **Chính sách**; dữ liệu `type`, `policy_ids` từ `GET policy/check-policy`; `GET policy/list-policy` | Hiển thị Văn bản/Phụ lục và các policy đã Consent ở chế độ chỉ xem | Không cho thay đổi/rút Consent trong phạm vi hiện tại |
 
 **Nguyên tắc chung**
 
@@ -248,15 +229,12 @@ sequenceDiagram
 - `is_editable` chỉ xác định trạng thái mặc định tick của policy trên FE; không tham gia quyết định `is_update`.
 - `CONSENT_CONFIG.document_content` là 01 Văn bản Consent HTML dùng chung cho cả 02 nhóm tuổi.
 - `CONSENT_CONFIG.appendix_type_0_content` và `appendix_type_1_content` lưu Phụ lục dưới dạng JSON string; BE trả nguyên chuỗi tương ứng dưới field `appendix_content`, FE thực hiện parse để hiển thị.
-- App xác thực API bằng `token`; Web/Wap xác định user bằng session.
 - Không sử dụng `is_required_display` hoặc `policy_key`.
 - `consent`, `displayConsent`, `systemType` từ CM không dùng để quyết định nghiệp vụ Imuzik trong phạm vi hiện tại.
 
-##### Bước 1 - Imuzik FE/BE: Kiểm tra Consent sau khi đăng nhập
+##### Bước 1 - Imuzik FE: Gọi API kiểm tra Consent
 
-Sau khi khách hàng đăng nhập thành công bằng số điện thoại, hệ thống thực hiện kiểm tra Consent theo từng kênh.
-
-###### Bước 1.1 - App: FE gọi API kiểm tra Consent
+Sau khi khách hàng đăng nhập thành công bằng số điện thoại, FE gọi API kiểm tra có cần thực hiện luồng Consent hay không.
 
 **API**
 
@@ -278,18 +256,6 @@ GET policy/check-policy?token=<token>&authorization_code=<authorization_code>
 ```
 
 FE không tự đánh giá trạng thái Consent. Toàn bộ logic xác định `is_update`, `type`, `policy_ids` được xử lý tại Imuzik BE ở Bước 2.
-
-###### Bước 1.2 - Web/Wap: Kiểm tra Consent theo session
-
-Sau khi đăng nhập thành công, Imuzik BE thực hiện **một lần** logic kiểm tra Consent tại Bước 2 và lưu kết quả vào session Web/Wap:
-
-- `is_update`;
-- `type`;
-- `policy_ids`.
-
-Layout Web/Wap chỉ đọc trạng thái trong session để quyết định hiển thị popup; **không gọi `GET policy/check-policy` bằng token và không thực hiện retry API từ layout**.
-
-Rule retry khi Imuzik BE tích hợp CM tại Bước 2.3 vẫn giữ nguyên.
 
 ##### Bước 2 - Imuzik BE: Xử lý kiểm tra Consent
 
@@ -407,9 +373,9 @@ CM trả response SOAP, Imuzik chỉ sử dụng các dữ liệu sau cho luồn
 
 `PYC_62335_2` và `PYC_62335_4` chỉ phát sinh khi truyền `idNo`/`idType`, không thuộc request Imuzik hiện tại.
 
-##### Bước 3 - Imuzik BE/FE: Trả kết quả kiểm tra Consent
+##### Bước 3 - Imuzik BE/FE: Trả response và xử lý response `GET policy/check-policy`
 
-###### Bước 3.1 - App: Response `GET policy/check-policy` thành công
+###### Bước 3.1 - Response thành công
 
 **Response**
 
@@ -432,17 +398,7 @@ Trong đó:
 - `type`: nhóm tuổi đã được ghi nhận tại local log; có thể `null` nếu chưa có dữ liệu nhóm tuổi local.
 - `policy_ids`: danh sách `policy.id` đã Consent được xác định từ local log hoặc mapping dữ liệu CM theo Bước 2.3.
 
-###### Bước 3.2 - Web/Wap: Lưu kết quả vào session
-
-Imuzik BE lưu `is_update`, `type`, `policy_ids` vào session sau khi hoàn tất Bước 2.
-
-- Layout đọc `is_update` trong session để quyết định hiển thị popup.
-- Không gọi/retry `GET policy/check-policy` từ layout.
-- Khi khách hàng xác nhận Consent thành công, hệ thống xóa cờ `is_update` trong session và cập nhật `type`, `policy_ids` theo Consent vừa lưu.
-
-###### Bước 3.3 - Response lỗi của API App hiện tại
-
-Các response dưới đây áp dụng cho trường hợp App gọi `GET policy/check-policy`.
+###### Bước 3.2 - Response lỗi
 
 | `errorCode` | `message` | Trường hợp | Xử lý FE |
 |---|---|---|---|
@@ -451,8 +407,6 @@ Các response dưới đây áp dụng cho trường hợp App gọi `GET policy
 | `300002` | `Invalid authorization code` | Có truyền `authorization_code` nhưng không hợp lệ/hết hiệu lực | Dừng xử lý; thực hiện lại cơ chế authorization theo luồng hiện tại |
 | `000002` | `Require login.` | Không truyền `token`/không có thông tin đăng nhập hợp lệ | Yêu cầu đăng nhập lại |
 | `000008` | `Token không hợp lệ.` | `token` không tồn tại hoặc hết hiệu lực | Yêu cầu đăng nhập lại |
-
-Web/Wap xử lý trạng thái đăng nhập theo session hiện tại; không phát sinh lỗi token từ layout.
 
 ##### Bước 4 - Imuzik FE: Hiển thị popup Xác minh người dùng
 
@@ -475,8 +429,7 @@ Khi kết quả kiểm tra Consent xác định `is_update=true`, FE hiển th�
 - Không có button **Tiếp tục**.
 - Việc bấm một trong hai button nhóm tuổi đồng thời là thao tác chọn `type` và tiếp tục lấy nội dung Consent.
 - Khi bấm **Không phải bây giờ**:
-  - Web/Wap: kết thúc session đăng nhập;
-  - App: thực hiện logout theo cơ chế hiện tại;
+  - thực hiện logout theo cơ chế hiện tại;
   - điều hướng về màn hình đăng nhập;
   - không cho khách hàng tiếp tục vào Home trong phiên đăng nhập hiện tại.
 
@@ -492,25 +445,17 @@ GET policy/list-policy
 
 **Request**
 
-| Field/Context | App | Web/Wap | Mô tả |
-|---|---|---|---|
-| `type` | Bắt buộc | Bắt buộc | `0`: từ 16 tuổi trở lên; `1`: dưới 16 tuổi |
-| `token` | Bắt buộc | Không truyền | App dùng token từ `authenticate/index`; Web/Wap xác định user theo session |
-| `authorization_code` | Không bắt buộc | Theo cơ chế hiện tại nếu có | Giữ theo contract hiện tại |
+| Field | Bắt buộc | Nguồn | Mô tả |
+|---|---:|---|---|
+| `type` | Có | Giá trị khách hàng chọn tại Bước 4 | `0`: từ 16 tuổi trở lên; `1`: dưới 16 tuổi |
+| `token` | Có | API `authenticate/index` | Token xác thực người dùng |
+| `authorization_code` | Không | Cơ chế authorization hiện tại | Giữ theo contract hiện tại |
 
-Ví dụ App:
+Ví dụ:
 
 ```http
 GET policy/list-policy?type=0&token=<token>&authorization_code=<authorization_code>
 ```
-
-Ví dụ Web/Wap:
-
-```http
-GET policy/list-policy?type=0
-```
-
-Request Web/Wap sử dụng session đăng nhập hiện tại để xác định user.
 
 ##### Bước 6 - Imuzik BE: Xử lý lấy Văn bản Consent, Phụ lục và danh sách policy
 
@@ -518,8 +463,7 @@ Imuzik BE thực hiện:
 
 1. Validate thông tin request:
    - Request sử dụng đúng method `GET`;
-   - App: `token` được truyền và còn hiệu lực;
-   - Web/Wap: session đăng nhập còn hiệu lực;
+   - `token` được truyền và còn hiệu lực;
    - `authorization_code` hợp lệ nếu có truyền;
    - `type ∈ {0,1}`.
 2. Query bản ghi `CONSENT_CONFIG` đang `is_current=1` và `status=active`.
@@ -549,8 +493,8 @@ ORDER BY sortorder ASC;
 | `000001` | `Hệ thống đang bận, vui lòng thử lại sau.` | Lỗi truy vấn DB hoặc không tồn tại `CONSENT_CONFIG` đang `is_current=1`, `status=active` |
 | `000003` | `Unknown method` | Request sử dụng method khác `GET` |
 | `300002` | `Invalid authorization code` | Có truyền `authorization_code` nhưng không hợp lệ/hết hiệu lực |
-| `000002` | `Require login.` | App không truyền token hoặc Web/Wap không có session đăng nhập hợp lệ |
-| `000008` | `Token không hợp lệ.` | Token App không tồn tại hoặc hết hiệu lực |
+| `000002` | `Require login.` | Không truyền `token`/không có thông tin đăng nhập hợp lệ |
+| `000008` | `Token không hợp lệ.` | `token` không tồn tại hoặc hết hiệu lực |
 | `130004` | `Nhóm tuổi không hợp lệ.` | Không truyền `type` hoặc `type` không thuộc `{0,1}` |
 | `130005` | `Không tìm thấy Văn bản Consent hiện hành.` | `CONSENT_CONFIG.document_content` không có dữ liệu |
 | `130006` | `Không tìm thấy Phụ lục Consent phù hợp.` | Không có nội dung Phụ lục tương ứng với `type` khách hàng đã chọn |
@@ -625,7 +569,7 @@ FE xử lý response lỗi của `GET policy/list-policy` như sau:
 | `000003` | `Unknown method` | Hiển thị lỗi kỹ thuật; không tiếp tục xử lý |
 | `300002` | `Invalid authorization code` | Dừng xử lý; thực hiện lại cơ chế authorization theo luồng hiện tại |
 | `000002` | `Require login.` | Yêu cầu khách hàng đăng nhập lại |
-| `000008` | `Token không hợp lệ.` | App yêu cầu khách hàng đăng nhập lại |
+| `000008` | `Token không hợp lệ.` | Yêu cầu khách hàng đăng nhập lại |
 | `130004` | `Nhóm tuổi không hợp lệ.` | Quay lại popup **Xác minh người dùng** để khách hàng chọn lại nhóm tuổi |
 | `130005` | `Không tìm thấy Văn bản Consent hiện hành.` | Hiển thị lỗi hệ thống; không cho tiếp tục xác nhận Consent |
 | `130006` | `Không tìm thấy Phụ lục Consent phù hợp.` | Hiển thị lỗi hệ thống; không cho tiếp tục xác nhận Consent |
@@ -653,15 +597,15 @@ POST policy/policy
 
 **Request**
 
-| Field/Context | App | Web/Wap | Mô tả |
-|---|---|---|---|
-| `token` | Bắt buộc | Không truyền | App dùng token từ `authenticate/index`; Web/Wap xác định user theo session |
-| `authorization_code` | Không bắt buộc | Theo cơ chế hiện tại nếu có | Giữ theo contract API hiện tại |
-| `type` | Bắt buộc | Bắt buộc | Giá trị khách hàng đã chọn tại Bước 4 |
-| `policy_version` | Bắt buộc | Bắt buộc | Version Consent khách hàng đã được hiển thị tại Bước 7 |
-| `policy_id` | Bắt buộc | Bắt buộc | Danh sách `policy.id` khách hàng đã tick, phân tách bằng dấu `,` |
+| Field | Bắt buộc | Nguồn | Mô tả |
+|---|---:|---|---|
+| `token` | Có | API `authenticate/index` | Xác định user/MSISDN |
+| `authorization_code` | Không | Cơ chế authorization hiện tại | Giữ theo contract API hiện tại |
+| `type` | Có | Giá trị khách hàng đã chọn tại Bước 4 | Nhóm tuổi dùng để xác định Phụ lục đã hiển thị |
+| `policy_version` | Có | Response Bước 7 | Version Consent khách hàng đã được hiển thị |
+| `policy_id` | Có | Danh sách policy khách hàng đã tick | Danh sách `policy.id`, phân tách bằng dấu `,` |
 
-Ví dụ App:
+Ví dụ:
 
 ```json
 {
@@ -673,8 +617,6 @@ Ví dụ App:
 }
 ```
 
-Web/Wap gửi các trường nghiệp vụ `type`, `policy_version`, `policy_id` và sử dụng session hiện tại để xác định user/MSISDN.
-
 FE gửi lại đúng `policy_version` đã nhận tại Bước 7. Imuzik BE sử dụng giá trị này để kiểm tra khách hàng đang xác nhận đúng version Consent hiện hành trước khi lưu.
 
 Sau khi FE gửi request → chuyển Bước 9.
@@ -685,8 +627,7 @@ Sau khi nhận request `POST policy/policy`, Imuzik BE thực hiện:
 
 1. Validate thông tin request:
    - Request sử dụng đúng method `POST`;
-   - App: `token` được truyền, còn hiệu lực và xác định được user/MSISDN;
-   - Web/Wap: session đăng nhập còn hiệu lực và xác định được user/MSISDN;
+   - `token` được truyền, còn hiệu lực và xác định được user/MSISDN;
    - `authorization_code` hợp lệ nếu có truyền;
    - `type ∈ {0,1}`;
    - `policy_version` được truyền;
@@ -823,7 +764,6 @@ Sau khi ghi `log_privacy_policy` thành công, Imuzik BE trả response thành c
 
 - Đóng popup Consent.
 - Xác định khách hàng đã hoàn tất luồng Consent.
-- Web/Wap: xóa cờ `is_update` trong session; cập nhật `type`, `policy_ids` theo Consent vừa lưu để phục vụ menu **Chính sách**.
 - Tiếp tục luồng đăng nhập và điều hướng vào Home.
 
 ###### Bước 12.2 - Response lỗi
@@ -889,10 +829,10 @@ Popup **không có radio chọn nhóm tuổi và không có button Tiếp tục*
 | STT | Thành phần | Loại | Nguồn | Mô tả |
 |---:|---|---|---|---|
 | 1 | Chính sách | Menu item | Menu sau đăng nhập | Khách hàng bấm để xem lại chính sách đã Consent |
-| 2 | Nhóm tuổi | Readonly | `type` từ `check-policy`/session | Chỉ hiển thị khi có dữ liệu local; không cho chỉnh sửa |
+| 2 | Nhóm tuổi | Readonly | `type` từ `GET policy/check-policy` | Chỉ hiển thị khi có dữ liệu local; không cho chỉnh sửa |
 | 3 | Văn bản Consent | Readonly | `GET policy/list-policy` | Hiển thị Văn bản Consent hiện hành |
 | 4 | Phụ lục | Readonly | `appendix_content` theo `type` | Hiển thị khi `type` có dữ liệu; FE parse JSON string |
-| 5 | Các policy đã Consent | Readonly | `policy_ids` từ `check-policy`/session | Đánh dấu các policy tương ứng; không cho thay đổi/rút Consent |
+| 5 | Các policy đã Consent | Readonly | `policy_ids` từ `GET policy/check-policy` | Đánh dấu các policy tương ứng; không cho thay đổi/rút Consent |
 
 #### 3.1.5 Business Rules
 
@@ -919,13 +859,11 @@ Popup **không có radio chọn nhóm tuổi và không có button Tiếp tục*
 | BR16 | Không gọi `getCustPolicy` lần 2 ngay trước `updateCustPolicy` | Chấp nhận rủi ro concurrent update trong phạm vi hiện tại |
 | BR16.1 | `getCustPolicy`: `code!=0` → `is_update=true`; lỗi kỹ thuật sau 3 retry → `is_update=false`. `updateCustPolicy`: `code!=0` hoặc lỗi kỹ thuật sau 3 retry → vẫn ghi local | `code!=0` không retry; lỗi kỹ thuật retry tối đa 3 lần |
 | BR17 | Local log Consent lưu tại DB `imuzik` và được cập nhật/ghi đè snapshot hiện hành | Không lưu `log_privacy_policy` tại `imuziklog` |
-| BR18 | App kiểm tra Consent bằng token; Web/Wap kiểm tra một lần sau login và lưu `is_update`, `type`, `policy_ids` vào session | Layout Web/Wap không gọi/retry `check-policy` bằng token |
-| BR19 | Khi Web/Wap xác nhận Consent thành công, xóa cờ `is_update` trong session và cập nhật `type`, `policy_ids` theo Consent vừa lưu | Phục vụ layout/menu |
-| BR20 | `GET policy/check-policy` trả thêm `type`, `policy_ids` cho App; Web/Wap lưu dữ liệu tương đương vào session | Dùng cho menu xem lại chính sách |
-| BR21 | Menu **Chính sách** chỉ cho xem; không cho thay đổi/rút Consent | Nếu `type=null`, không tự suy diễn nhóm tuổi từ CM và không hiển thị Phụ lục theo nhóm tuổi |
-| BR22 | Mã `130002` giữ nghĩa `Sai định dạng tham số truyền vào!`; mã `130003` giữ nghĩa `Nhập id không tồn tại!` | Các mã lỗi mới bắt đầu từ `130004` |
-| BR23 | Phạm vi kênh: Web, Wap, App Imuzik; đăng nhập bằng SĐT | Không Google/Facebook, không kênh khác |
-| BR24 | Chức năng thay đổi/rút Consent sau đăng nhập không thuộc phạm vi tài liệu này | Menu Chính sách chỉ xem |
+| BR18 | `GET policy/check-policy` trả thêm `type`, `policy_ids` | Dùng cho menu xem lại chính sách |
+| BR19 | Menu **Chính sách** chỉ cho xem; không cho thay đổi/rút Consent | Nếu `type=null`, không tự suy diễn nhóm tuổi từ CM và không hiển thị Phụ lục theo nhóm tuổi |
+| BR20 | Mã `130002` giữ nghĩa `Sai định dạng tham số truyền vào!`; mã `130003` giữ nghĩa `Nhập id không tồn tại!` | Các mã lỗi mới bắt đầu từ `130004` |
+| BR21 | Tài liệu mô tả luồng API chuẩn trên App Imuzik, đăng nhập bằng SĐT | Biến thể Web/Wap do Dev clone/điều chỉnh ở bản triển khai riêng |
+| BR22 | Chức năng thay đổi/rút Consent sau đăng nhập không thuộc phạm vi tài liệu này | Menu Chính sách chỉ xem |
 
 ### 3.2 UC02 - Xem lại chính sách đã Consent
 
@@ -935,15 +873,15 @@ Sau khi đăng nhập thành công, khách hàng có thể chọn menu **Chính 
 
 | Nội dung | Xử lý |
 |---|---|
-| Nguồn `type`, `policy_ids` | App lấy từ response `GET policy/check-policy`; Web/Wap lấy từ session đã lưu sau login/Consent |
-| Lấy nội dung Văn bản/Phụ lục | Nếu `type` có dữ liệu, gọi `GET policy/list-policy?type=...` theo cơ chế auth của từng kênh |
+| Nguồn `type`, `policy_ids` | Response `GET policy/check-policy` |
+| Lấy nội dung Văn bản/Phụ lục | Nếu `type` có dữ liệu, gọi `GET policy/list-policy?type=...` |
 | Hiển thị policy đã Consent | Đánh dấu các policy có `id` thuộc `policy_ids` ở trạng thái readonly |
 | Quyền thao tác | Chỉ xem; không cho thay đổi/rút Consent |
 | Trường hợp `type=null` | Không tự suy diễn nhóm tuổi từ CM; hiển thị thông tin policy đã ghi nhận và Văn bản chung, không hiển thị Phụ lục theo nhóm tuổi |
 
 #### 3.2.2 Response dữ liệu phục vụ menu
 
-`GET policy/check-policy`/session sử dụng cấu trúc dữ liệu:
+`GET policy/check-policy` sử dụng cấu trúc dữ liệu:
 
 ```json
 {
@@ -953,7 +891,7 @@ Sau khi đăng nhập thành công, khách hàng có thể chọn menu **Chính 
 }
 ```
 
-Sau khi khách hàng xác nhận Consent thành công, Web/Wap cập nhật `type`, `policy_ids` trong session; App sử dụng dữ liệu vừa submit hoặc lấy lại qua `check-policy` ở lần kiểm tra tiếp theo.
+Sau khi khách hàng xác nhận Consent thành công, FE sử dụng dữ liệu vừa submit; khi cần đồng bộ lại trạng thái, gọi `GET policy/check-policy` để lấy `type`, `policy_ids` hiện hành.
 
 ## 4. Yêu cầu tích hợp và dữ liệu
 
@@ -1027,15 +965,14 @@ Bảng được lưu tại DB **`imuzik`**, không lưu tại `imuziklog`.
 
 Mỗi user sử dụng một snapshot hiện hành: chưa có bản ghi thì INSERT, đã có thì UPDATE theo Consent mới nhất.
 
-### 4.2 API/session nội bộ Imuzik
+### 4.2 API nội bộ Imuzik
 
 | API/Thành phần | Thay đổi chính |
 |---|---|
-| `GET policy/check-policy` | App gọi bằng token; trả `is_update`, `type`, `policy_ids` |
-| Session Web/Wap | Sau login, BE chạy logic check một lần và lưu `is_update`, `type`, `policy_ids`; layout chỉ đọc session |
-| `GET policy/list-policy` | Bổ sung `type`; App token/Web-Wap session; trả `policy_version`, `document_content`, `appendix_content` dạng JSON string, `policies[]` |
-| `POST policy/policy` | Bổ sung `type`, `policy_version`; App token/Web-Wap session; validate version/policy bắt buộc, gọi CM và ghi local log |
-| Menu Chính sách | Dùng `type`, `policy_ids` từ check/session và `list-policy` để hiển thị readonly |
+| `GET policy/check-policy` | Xác thực bằng `token`; trả `is_update`, `type`, `policy_ids` |
+| `GET policy/list-policy` | Bổ sung `type`; xác thực bằng `token`; trả `policy_version`, `document_content`, `appendix_content` dạng JSON string, `policies[]` |
+| `POST policy/policy` | Bổ sung `type`, `policy_version`; xác thực bằng `token`; validate version/policy bắt buộc, gọi CM và ghi local log |
+| Menu Chính sách | Dùng `type`, `policy_ids` từ `GET policy/check-policy` và `GET policy/list-policy` để hiển thị readonly |
 
 `GET policy/list-policy` thay đổi cấu trúc `data` từ danh sách policy sang object chứa Văn bản/Phụ lục/danh sách policy; FE và BE phải release đồng bộ.
 
@@ -1065,22 +1002,20 @@ Mã lỗi CM chỉ ghi log tích hợp, không trả trực tiếp về FE trong
 
 | STT | Ràng buộc |
 |---:|---|
-| 1 | Phạm vi áp dụng: Web/Wap/App Imuzik, đăng nhập bằng số điện thoại. |
-| 2 | App xác thực API Consent bằng token; Web/Wap xác thực theo session. Layout Web/Wap không gọi/retry `GET policy/check-policy` bằng token. |
-| 3 | Web/Wap thực hiện check Consent một lần ngay sau login và lưu `is_update`, `type`, `policy_ids` vào session. Xác nhận thành công thì xóa cờ `is_update` và cập nhật dữ liệu phục vụ menu. |
-| 4 | Button **Không phải bây giờ** tại popup Xác minh người dùng thực hiện logout và quay lại màn hình đăng nhập; không cho tiếp tục vào Home. |
-| 5 | Imuzik tự quản lý version, Văn bản Consent, Phụ lục và rule policy; CM không quản lý `policyVersion` riêng cho Imuzik. |
-| 6 | Phụ lục được lưu theo từng `type` dưới dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`; FE chịu trách nhiệm parse để render. |
-| 7 | `log_privacy_policy` là source of truth local và được lưu tại DB `imuzik`, không lưu tại `imuziklog`. |
-| 8 | `vt_member.is_update_policy` và `vt_member.policy_id` không còn là source of truth của luồng Consent mới. |
-| 9 | `GET policy/list-policy` đổi cấu trúc response nên FE/BE phải release đồng bộ. |
-| 10 | FE phải gửi `policy_version` đã nhận từ `GET policy/list-policy`; BE chỉ lưu khi version này bằng `current_policy_version`. |
-| 11 | `policy_version` chỉ được xác lập khi INSERT bản ghi `CONSENT_CONFIG` mới; UPDATE bản ghi hiện tại không tự tăng version. |
-| 12 | Local log chỉ được ghi sau khi khách hàng submit Consent hợp lệ qua `POST policy/policy`; nhánh `check-policy` công nhận Consent từ CM không tự tạo/nâng local log. |
-| 13 | Khi `updateCustPolicy` trả `code!=0` hoặc lỗi kỹ thuật sau 3 lần retry, Imuzik vẫn ghi `log_privacy_policy` và cho phép tiếp tục đăng nhập. Không có cơ chế pending/resync CM trong phạm vi tài liệu này. |
-| 14 | Khi local log có `policy_version = current_policy_version`, hệ thống trả `is_update=false` mà không đối chiếu lại `confirm_ids` hoặc gọi CM. |
-| 15 | `GET policy/check-policy`/session trả thêm `type`, `policy_ids` để phục vụ menu xem lại chính sách. Nếu `type=null`, hệ thống không tự suy diễn nhóm tuổi từ CM. |
-| 16 | Menu **Chính sách** chỉ cho xem; không cho thay đổi/rút Consent trong phạm vi hiện tại. |
-| 17 | Không gọi `getCustPolicy` lần 2 ngay trước `updateCustPolicy`; chấp nhận rủi ro ghi đè lựa chọn khi nhiều dịch vụ cùng cập nhật 06 field CM. |
-| 18 | `createDatetime` từ CM không được dùng để suy ra `policy_version` của Imuzik. |
-| 19 | Không triển khai CMS Consent hoặc xác minh thông tin người giám hộ trong phạm vi tài liệu này. |
+| 1 | Bản tài liệu này mô tả luồng API chuẩn trên App Imuzik, đăng nhập bằng số điện thoại; biến thể Web/Wap do Dev clone/điều chỉnh ở bản triển khai riêng. |
+| 2 | Button **Không phải bây giờ** tại popup Xác minh người dùng thực hiện logout và quay lại màn hình đăng nhập; không cho tiếp tục vào Home. |
+| 3 | Imuzik tự quản lý version, Văn bản Consent, Phụ lục và rule policy; CM không quản lý `policyVersion` riêng cho Imuzik. |
+| 4 | Phụ lục được lưu theo từng `type` dưới dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`; FE chịu trách nhiệm parse để render. |
+| 5 | `log_privacy_policy` là source of truth local và được lưu tại DB `imuzik`, không lưu tại `imuziklog`. |
+| 6 | `vt_member.is_update_policy` và `vt_member.policy_id` không còn là source of truth của luồng Consent mới. |
+| 7 | `GET policy/list-policy` đổi cấu trúc response nên FE/BE phải release đồng bộ. |
+| 8 | FE phải gửi `policy_version` đã nhận từ `GET policy/list-policy`; BE chỉ lưu khi version này bằng `current_policy_version`. |
+| 9 | `policy_version` chỉ được xác lập khi INSERT bản ghi `CONSENT_CONFIG` mới; UPDATE bản ghi hiện tại không tự tăng version. |
+| 10 | Local log chỉ được ghi sau khi khách hàng submit Consent hợp lệ qua `POST policy/policy`; nhánh `check-policy` công nhận Consent từ CM không tự tạo/nâng local log. |
+| 11 | Khi `updateCustPolicy` trả `code!=0` hoặc lỗi kỹ thuật sau 3 lần retry, Imuzik vẫn ghi `log_privacy_policy` và cho phép tiếp tục đăng nhập. Không có cơ chế pending/resync CM trong phạm vi tài liệu này. |
+| 12 | Khi local log có `policy_version = current_policy_version`, hệ thống trả `is_update=false` mà không đối chiếu lại `confirm_ids` hoặc gọi CM. |
+| 13 | `GET policy/check-policy` trả thêm `type`, `policy_ids` để phục vụ menu xem lại chính sách. Nếu `type=null`, hệ thống không tự suy diễn nhóm tuổi từ CM. |
+| 14 | Menu **Chính sách** chỉ cho xem; không cho thay đổi/rút Consent trong phạm vi hiện tại. |
+| 15 | Không gọi `getCustPolicy` lần 2 ngay trước `updateCustPolicy`; chấp nhận rủi ro ghi đè lựa chọn khi nhiều dịch vụ cùng cập nhật 06 field CM. |
+| 16 | `createDatetime` từ CM không được dùng để suy ra `policy_version` của Imuzik. |
+| 17 | Không triển khai CMS Consent hoặc xác minh thông tin người giám hộ trong phạm vi tài liệu này. |
