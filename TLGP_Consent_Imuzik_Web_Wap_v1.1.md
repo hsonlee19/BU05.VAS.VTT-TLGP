@@ -2,14 +2,14 @@
 
 **Giải pháp cập nhật và quản lý Consent khách hàng trên Imuzik – áp dụng cho Website và Wapsite**
 
-Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.0`, điều chỉnh theo kiến trúc Web/Wap (Yii2 server-render, đăng nhập bằng session).
+Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.3`, giữ nguyên nghiệp vụ Consent và điều chỉnh theo kiến trúc Web/Wap (Yii2 server-render, đăng nhập bằng session).
 
 | Thông tin | Nội dung |
 |---|---|
 | Tên yêu cầu / dự án | Cập nhật và quản lý Consent khách hàng trên Imuzik – Web/Wap |
-| Phiên bản | 1.1 (Web/Wap) |
-| Tài liệu gốc | TLGP_Consent_Imuzik_v1.0 (05/10/2026) |
-| Ngày cập nhật | 05/10/2026 |
+| Phiên bản | 1.2 (Web/Wap) |
+| Tài liệu gốc | TLGP_Consent_Imuzik_v1.3 (06/10/2026) |
+| Ngày cập nhật | 06/10/2026 |
 
 ## 1. Lịch sử thay đổi
 
@@ -17,21 +17,22 @@ Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.0`, điều chỉnh theo k
 |---|---|---|---|
 | 05/10/2026 | 1.0 | Toàn bộ | Ban hành baseline giải pháp Consent Imuzik để triển khai FE/BE/DB và tích hợp CM |
 | 05/10/2026 | 1.1 | Mục 2–6 | Tách luồng riêng triển khai Web/Wap và tích hợp CM |
+| 06/10/2026 | 1.2 | Mục 2–7 | Đồng bộ nghiệp vụ với App v1.3: mã lỗi, `policy_version`, Phụ lục JSON string, fail-open, `policy.note`, nút Quay lại, Menu Chính sách và dual-write `vt_member`; giữ khác biệt technical Web/Wap |
 
 ## 2. Thông tin tổng quan
 
-### 2.1 Khác biệt chính so với TLGP v1.0
+### 2.1 Khác biệt technical so với TLGP App v1.3
 
-| Hạng mục | TLGP v1.0 (App) | Bản Web/Wap |
+| Hạng mục | TLGP App v1.3 | Bản Web/Wap |
 |---|---|---|
 | Xác thực | `token` + `authorization_code` | Session Yii (`Yii::$app->user`), CSRF cho POST |
-| Kiểm tra Consent | FE gọi `GET policy/check-policy` sau login | **Web/Wap tự kiểm tra 1 lần tại sự kiện `afterLogin`**, lưu kết quả vào session; không có endpoint check-policy cho Web/Wap |
-| Hiển thị popup | FE quyết định theo response | Layout `main.php` đọc cờ session và render popup |
-| Lấy nội dung | `GET policy/list-policy` (API) | Server render trong layout (Văn bản + 02 Phụ lục ẩn + điều khoản); JS hiển thị Phụ lục theo `type` |
-| Lưu Consent | `POST policy/policy` (API) | `POST /policy/update-policy` (AJAX, reuse route hiện có, bổ sung `type`) |
-| Popup chọn nhóm tuổi | Radio + nút "Tiếp tục" | **3 nút theo design**: "16 tuổi trở lên" / "Dưới 16 tuổi" / "Không phải bây giờ" |
-| Từ chối | Không mô tả | "Không phải bây giờ" → đăng xuất + tạm dừng tự đăng nhập MSISDN trong phiên |
-| Mã lỗi nhóm tuổi | `130003` | **`130008`** (giữ `130003` = "Nhập id không tồn tại!" như hiện trạng) |
+| Kiểm tra Consent | FE gọi `GET policy/check-policy` sau login | Kiểm tra 1 lần tại `afterLogin`, lưu kết quả vào session; layout chỉ đọc session |
+| Hiển thị popup | FE quyết định theo response API | Layout `main.php` đọc cờ session và render popup |
+| Lấy nội dung | `GET policy/list-policy` | Server render dữ liệu từ `consent_config`/`policy`; trình duyệt parse Phụ lục JSON string theo `type` |
+| Lưu Consent | `POST policy/policy` | `POST /policy/update-policy` AJAX, gửi `type`, `policy_version`, danh sách policy và CSRF |
+| Popup nhóm tuổi | 3 action theo design | Giữ nguyên 3 action: `16 tuổi trở lên` / `Dưới 16 tuổi` / `Không phải bây giờ` |
+| Menu Chính sách | Có, readonly | Có, readonly; lấy dữ liệu qua service/session/server-render thay vì API token |
+| Rule nghiệp vụ/error code | Baseline | Giữ nguyên baseline App v1.3; chỉ khác cách technical implementation |
 
 ### 2.2 Phạm vi
 
@@ -44,14 +45,15 @@ Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.0`, điều chỉnh theo k
 - Kiểm tra cần Consent theo `CONSENT_CONFIG` → `log_privacy_policy` → CM.
 - Popup chọn nhóm tuổi, popup Văn bản + Phụ lục + 06 điều khoản.
 - Lưu Consent tại CM (`updateCustPolicy`) và `log_privacy_policy`.
-- DB: tạo `consent_config`, `log_privacy_policy`; bổ sung `policy.is_editable`.
+- Menu **Chính sách** để khách hàng xem lại chính sách đã Consent ở chế độ readonly, cùng phạm vi nghiệp vụ với App.
+- DB: tạo `consent_config`, `log_privacy_policy`; sử dụng `policy.note` hiện có và bổ sung `policy.is_editable`.
 - Logic dùng chung đặt tại `common/` để giai đoạn sau App/Miniapp tái sử dụng.
 
 **Ngoài phạm vi (giai đoạn này)**
 
-- API App/Miniapp (`api/controllers/PolicyController.php`, `api/controllers/v2/PolicyController.php`, `frontend/api/`) – giữ nguyên luồng cũ.
+- Code/API App/Miniapp không thuộc phạm vi triển khai của tài liệu Web/Wap này; nghiệp vụ App thực hiện theo TLGP App riêng.
 - Đăng nhập Google/Facebook.
-- CMS quản trị Văn bản/Phụ lục; xem lại/thay đổi/rút Consent; xác minh người giám hộ.
+- CMS quản trị Văn bản/Phụ lục; thay đổi/rút Consent; xác minh người giám hộ.
 - Đồng bộ bù CM khi SAVE CM thất bại.
 - Build lại bundle `js/build/app.min.js` (JS mới viết inline trong view).
 
@@ -67,18 +69,22 @@ Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.0`, điều chỉnh theo k
 | `frontend/config/main.php`, `wap/config/main.php` | Gắn handler `on afterLogin` cho component `user` |
 | `frontend/controllers/SiteController.php`, `wap/controllers/SiteController.php` | `actionLogout` hỗ trợ cờ `consent_skip_autologin` |
 | `frontend/controllers/AppController.php`, `wap/controllers/AppController.php` | Bỏ qua tự đăng nhập MSISDN khi có cờ `consent_skip_autologin` |
-| `frontend/controllers/PolicyController.php`, `wap/controllers/PolicyController.php` | Sửa `actionUpdatePolicy` theo luồng mới (nhận `type` trong `formData`, gọi `ConsentService::saveConsent`) |
-| `frontend/views/layouts/_confirm-policy.php`, `wap/views/layouts/_confirm-policy.php` | Thay điều kiện hiển thị; thêm popup chọn nhóm tuổi; popup văn bản render từ `consent_config` + `policy`; JS inline |
-| `frontend/web/js/coder.js`, `wap/web/js/coder.js` | **Không sửa** – giữ logic "Xác nhận chung"/đếm policy bắt buộc hiện có |
-| `vt_member.is_update_policy`, `vt_member.policy_id` | Không dùng làm source of truth (xem đề xuất tương thích App tại Mục 7) |
+| `frontend/controllers/PolicyController.php`, `wap/controllers/PolicyController.php` | Sửa `actionUpdatePolicy` theo luồng mới (nhận `type`, `policy_version`, danh sách policy trong `formData`, gọi `ConsentService::saveConsent`) |
+| `frontend/views/layouts/_confirm-policy.php`, `wap/views/layouts/_confirm-policy.php` | Thay điều kiện hiển thị; thêm popup chọn nhóm tuổi; popup văn bản render từ `consent_config` + `policy`; parse Phụ lục JSON string; hiển thị `policy.note`; có nút Quay lại; JS inline |
+| `frontend/web/js/coder.js`, `wap/web/js/coder.js` | Giữ/reuse logic hiện có khi phù hợp; bổ sung phần parse Phụ lục JSON, `policy_version`, Quay lại theo cấu trúc Web/Wap |
+| Menu **Chính sách** (Web/Wap) | Bổ sung điểm truy cập readonly; dữ liệu nghiệp vụ tương đương App UC02, cách route/view/service do Dev bố trí theo code hiện tại |
+| `vt_member.is_update_policy`, `vt_member.policy_id` | Không dùng làm source of truth; dual-write sau khi lưu Consent local thành công để tương thích luồng cũ |
 
-### 2.4 Nguyên tắc giải pháp (kế thừa TLGP v1.0)
+### 2.4 Nguyên tắc giải pháp (kế thừa TLGP App v1.3)
 
 - `policy.id` là khóa kỹ thuật; `policy.name` là key mapping CM; `sortorder` xác định thứ tự Điều khoản 1–6.
 - `is_required` xác định điều khoản bắt buộc; `is_editable` chỉ xác định trạng thái tick mặc định.
-- `consent_config` có 01 Văn bản HTML dùng chung + 02 Phụ lục HTML theo `type` cho mỗi version.
-- FE không tự chọn Phụ lục, không tự map policy sang CM.
+- `policy.note` là ghi chú độc lập của điều khoản; có dữ liệu thì hiển thị dưới `description`, không tham gia validation và không suy diễn từ `is_editable`.
+- `consent_config` có 01 Văn bản HTML dùng chung + 02 Phụ lục **JSON string** theo `type` cho mỗi version; trình duyệt parse chuỗi JSON để render.
+- `policy_version` khách hàng đã xem phải được gửi lại khi lưu Consent và validate với current version.
 - Local log cùng `current_policy_version` → coi như đã hoàn tất Consent, không đối chiếu `confirm_ids`, không gọi CM.
+- Lỗi đọc `consent_config` hoặc thiếu Văn bản/Phụ lục/danh sách policy do lỗi cấu hình dữ liệu → fail-open trong lần đăng nhập hiện tại; không ghi local Consent, lần đăng nhập sau kiểm tra lại.
+- Sau khi ghi `log_privacy_policy` thành công, dual-write `vt_member.is_update_policy=1`, `vt_member.policy_id=<confirm_ids>` để tương thích; không dùng hai field này làm source of truth.
 - Không dùng `consent`, `displayConsent`, `systemType` của CM.
 
 ## 3. Yêu cầu chức năng
@@ -91,7 +97,7 @@ Tài liệu dẫn xuất từ `TLGP_Consent_Imuzik_v1.0`, điều chỉnh theo k
 | Trigger | Sự kiện `afterLogin` của component `user` |
 | Điều kiện đầu vào | Xác định được MSISDN của user (`vt_member.username`); đọc được `consent_config` current/active |
 | Đầu ra thành công | User đáp ứng rule Consent hiện hành và dùng tiếp dịch vụ |
-| Đầu ra không thành công | User chọn "Không phải bây giờ" → đăng xuất; hoặc lỗi hệ thống → giữ popup, hiển thị lỗi |
+| Đầu ra không thành công | User chọn "Không phải bây giờ" → đăng xuất; lỗi request/auth/submit không thuộc fail-open → giữ popup/hiển thị lỗi; lỗi cấu hình/nội dung Consent thuộc fail-open → bỏ qua Consent trong lần đăng nhập hiện tại |
 
 ### 3.2 Sơ đồ luồng
 
@@ -115,11 +121,11 @@ sequenceDiagram
     BE->>DB: consent_config current/active
     BE->>DB: log_privacy_policy theo user_id
     alt Có log cùng current_policy_version
-        BE->>SS: consent_check = {user_id, need_update:false}
+        BE->>SS: consent_check = {user_id, need_update:false, type, policy_ids}
     else Chưa có log / khác version
         BE->>CM: getCustPolicy(isdn) – tối đa 3 lần khi lỗi kỹ thuật
         alt Lỗi kỹ thuật sau 3 lần
-            BE->>SS: need_update=false (không hiện popup lần này)
+            BE->>SS: need_update=false (fail-open lần này; không ghi local Consent)
         else code != 0 hoặc DTO rỗng
             BE->>SS: need_update=true
         else code = 0 và DTO có dữ liệu
@@ -137,22 +143,23 @@ sequenceDiagram
     alt user_id khớp và need_update=true
         BE-->>FE: Layout render Popup chọn nhóm tuổi (MH01)
         alt Chọn "16 tuổi trở lên" / "Dưới 16 tuổi"
-            FE-->>KH: Popup văn bản (MH02) – nội dung đã render sẵn, hiển thị Phụ lục theo type
+            FE-->>KH: Popup văn bản (MH02) – dữ liệu đã render sẵn, JS parse Phụ lục JSON theo type
             KH->>FE: Tick điều khoản + Xác nhận chung → ĐỒNG Ý
-            FE->>BE: POST /policy/update-policy (type, policy_id, _csrf)
-            BE->>DB: Validate policy active + is_required
+            FE->>BE: POST /policy/update-policy (type, policy_version, policy_id, _csrf)
+            BE->>DB: Validate policy_version + policy active + is_required
             alt Thiếu policy bắt buộc / sai định dạng
                 BE-->>FE: Lỗi → giữ popup
             else Hợp lệ
                 BE->>CM: updateCustPolicy(isdn, custPolicyDTO) – tối đa 3 lần khi lỗi kỹ thuật
                 BE->>DB: INSERT/UPDATE log_privacy_policy (mọi kết quả CM)
+                BE->>DB: Dual-write vt_member.is_update_policy/policy_id
                 BE->>SS: need_update=false
                 BE-->>FE: errorCode=000000 → reload trang
             end
         else Chọn "Không phải bây giờ"
             FE->>BE: GET /logout?consent_skip=1
             BE->>SS: logout (hủy session) + giữ cờ consent_skip_autologin
-            BE-->>FE: Trang chủ ở chế độ khách
+            BE-->>FE: Redirect màn hình đăng nhập
         end
     else Không có cờ / need_update=false
         BE-->>FE: Không hiển thị popup Consent (popup khảo sát yêu thích nếu có)
@@ -170,18 +177,21 @@ sequenceDiagram
 Yii::$app->session->set('consent_check', [
     'user_id'     => $member->id,
     'need_update' => true | false,
+    'type'        => <0|1|null>,
+    'policy_ids'  => <array>,
 ]);
 ```
 
 - Dùng `afterLogin` thay vì `LoginForm`: dùng cả đăng nhập và tự động đăng nhập.
 - Lưu kèm `user_id`: tránh dùng nhầm kết quả của số điện thoại khác nhau trong cùng session.
+- `type`, `policy_ids` được lưu khi xác định được để phục vụ Menu Chính sách; semantics giữ như App, không tự suy diễn `type` khi không có dữ liệu local.
 
-#### Bước 2 – `ConsentService::checkNeedConsent` (giữ nguyên rule TLGP v1.0 Bước 2)
+#### Bước 2 – `ConsentService::checkNeedConsent` (giữ nguyên rule nghiệp vụ TLGP App v1.3)
 
 1. Lấy `consent_config` có `is_current=1` và `status='active'` → `current_policy_version`.
-   - Lỗi DB / không có bản ghi → ghi log lỗi, `need_update=false` (không chặn người dùng vì lỗi cấu hình) – *xem Mục 7, điểm 6*.
+   - Lỗi đọc DB / không có bản ghi → ghi log lỗi, `need_update=false` theo fail-open; không tạo/cập nhật `log_privacy_policy`; lần đăng nhập sau kiểm tra lại.
 2. Tra `log_privacy_policy` theo `user_id`:
-   - Có bản ghi và `policy_version = current_policy_version` → `need_update=false`.
+   - Có bản ghi và `policy_version = current_policy_version` → `need_update=false`, đồng thời lấy `type`, `confirm_ids` để lưu session phục vụ Menu Chính sách.
    - Không có / khác version → Bước 3.
 3. Gọi CM `getCustPolicy(isdn)`:
    - `code=0` + `custPolicyDTO` có dữ liệu → so sánh từng `policy.name` (active, `is_required=1`) với field cùng tên; tất cả `=1` → `false`, ngược lại → `true`.
@@ -224,18 +234,20 @@ Bỏ hoàn toàn điều kiện cũ `created_at >= 2023-07-01 && is_update_polic
 
 #### Bước 5 – Lấy nội dung (server render, không dùng AJAX)
 
-> **Điều chỉnh khi triển khai:** logic checkbox hiện có trong `coder.js` (đóng gói trong `app.min.js`) gắn sự kiện cho các checkbox **tại thời điểm tải trang**. Để giữ nguyên `coder.js` và không build lại bundle, Web/Wap **render sẵn** Văn bản, **cả 02 Phụ lục** (ẩn) và danh sách điều khoản ngay khi tải trang có popup; khi khách hàng chọn nhóm tuổi, JS chỉ hiển thị Phụ lục tương ứng `type`. Không có endpoint `list-policy` cho Web/Wap. Kết quả nghiệp vụ không đổi so với TLGP (Phụ lục hiển thị đúng theo `type`, `type` được validate và lưu tại server).
+Web/Wap không gọi `GET policy/list-policy`. Khi cần hiển thị Consent, server lấy dữ liệu từ `consent_config` + `policy` và render vào page; trình duyệt xử lý phần hiển thị theo `type`.
 
 **Xử lý BE** (`ConsentService::getContent()`, gọi trong `_confirm-policy.php` khi cần hiển thị popup)
 
-1. Lấy `consent_config` current/active → không có → `000001`; `document_content` rỗng → `130004`.
-2. `appendix_type_0_content`, `appendix_type_1_content` → rỗng → `130005`.
-3. `SELECT * FROM policy WHERE is_active=1 ORDER BY sortorder` → rỗng → `130006`.
-4. Có lỗi → không hiển thị popup lần này, ghi log category `consent` (cùng nguyên tắc Mục 7 điểm 6).
+1. Lấy `consent_config` current/active và `policy_version`.
+   - Lỗi đọc/không có config → ghi log và fail-open: không hiển thị Consent lần này, không ghi local Consent.
+2. `document_content` rỗng → `130005`; xử lý fail-open.
+3. `appendix_type_0_content`, `appendix_type_1_content` là **JSON string**. Sau khi khách hàng chọn `type`, nếu Phụ lục tương ứng bị thiếu → `130006` và xử lý fail-open; không dùng trạng thái Phụ lục của `type` còn lại để quyết định luồng hiện tại.
+4. Lấy policy active theo `sortorder`, bao gồm `description`, `note`, `is_required`, `is_editable`; không có policy → `130007`; xử lý fail-open.
+5. Render `policy_version` vào input ẩn để gửi lại khi SAVE.
+6. Render dữ liệu Văn bản, 02 chuỗi Phụ lục và policy vào page. Khi khách hàng chọn `type`, JS chọn chuỗi Phụ lục tương ứng, parse JSON (`title`, `warning`, `parent_content`, `confirm_content`) và render.
+7. Nếu fail-open tại bước này: không tạo/cập nhật `log_privacy_policy`, không coi khách hàng đã Consent; session chỉ bỏ yêu cầu popup trong lần đăng nhập hiện tại.
 
-**Vị trí bảng điều khoản trong Phụ lục:** HTML Phụ lục chứa placeholder `{{POLICY_LIST}}`; phần trước placeholder hiển thị trên bảng điều khoản, phần sau hiển thị dưới bảng (giữ đúng thứ tự PDF: tiêu đề → câu dẫn → bảng → Lưu ý). Không có placeholder thì toàn bộ Phụ lục hiển thị trước bảng.
-
-Bổ sung so với TLGP v1.0: hiển thị `policy.note` dưới điều khoản (theo design MH02).
+`policy.note` nếu có được hiển thị dưới `description`; `note` không tham gia validation.
 
 #### Bước 6 – Popup Văn bản Consent (MH02)
 
@@ -244,13 +256,13 @@ Bổ sung so với TLGP v1.0: hiển thị `policy.note` dưới điều khoản
   <b>MH02 – Popup Văn bản Consent</b>
 </p>
 
-- Render `document_content`, sau đó `appendix_content` (HTML từ DB, render nguyên bản – chỉ DBA/BA được ghi bảng `consent_config`).
+- Render `document_content`; JS parse Phụ lục JSON string theo `type` và render các field `title`, `warning`, `parent_content`, `confirm_content` theo design.
 - Render danh sách điều khoản theo thứ tự trả về, giữ cấu trúc DOM hiện có (`#form-confirm`, `.box-check`, `.container-checkbox.required-box|optional-box`, `#stt-check{n}`, `#footer-all-confirm`, `#confirm-all-policy`, `#btn-confirm`) để **tái sử dụng nguyên logic JS hiện có trong `coder.js`**:
   - Tick "Tôi xác nhận đồng ý…" (Xác nhận chung) → tự tick toàn bộ điều khoản;
   - Nút **ĐỒNG Ý** chỉ active khi toàn bộ điều khoản `is_required=1` đã tick.
 - Hiển thị `note` (nếu có) dưới `description`.
-- Tick mặc định theo `is_editable=1` (sau khi render, cập nhật bộ đếm cho khớp logic `coder.js`).
-- Có nút quay lại Popup chọn nhóm tuổi *(đề xuất – xem Mục 7)*.
+- Trạng thái tick mặc định lấy theo `is_editable`; mapping kỹ thuật 0/1 và cách đồng bộ bộ đếm do Dev xử lý theo code/data hiện tại.
+- Có nút **Quay lại** Popup chọn nhóm tuổi; khi quay lại chưa lưu Consent và khách hàng có thể chọn lại `type`.
 
 #### Bước 7 – AJAX lưu Consent: `POST /policy/update-policy`
 
@@ -259,23 +271,25 @@ Bổ sung so với TLGP v1.0: hiển thị `policy.note` dưới điều khoản
 | Field | Bắt buộc | Mô tả |
 |---|---:|---|
 | `_csrf` | Có | CSRF token Yii |
-| `formData` | Có | JSON `serializeArray()` của `#form-confirm`: các phần tử `id_confirm[]` (= `policy.id` đã tick) và `type` (input ẩn, gán khi chọn nhóm tuổi) |
+| `formData` | Có | JSON `serializeArray()` của `#form-confirm`: `id_confirm[]` (= `policy.id` đã tick), `type`, `policy_version` (input ẩn lấy từ config đã render) |
 
 **Response**: `{"status": 1|0, "errorCode": "...", "message": "..."}` – `coder.js` dùng `status` (1 → chuyển về trang chủ; 0 → `alert(message)`).
 
-**Xử lý BE** (`ConsentService::saveConsent($member, $type, $ids)`) – theo TLGP v1.0 Bước 9–11:
+**Xử lý BE** (`ConsentService::saveConsent(...)`) – giữ outcome nghiệp vụ theo TLGP App v1.3:
 
 1. Chưa đăng nhập → `000002`.
-2. `type ∉ {0,1}` → `130008`.
+2. `type ∉ {0,1}` → `130004`.
 3. `policy_id` sai định dạng → `130002`; có id không tồn tại/không active → `130003`.
-4. Thiếu policy bắt buộc → `130007` (không gọi CM).
-5. Lấy `current_policy_version`.
+4. Lấy `current_policy_version`; so sánh `policy_version` từ form với current:
+   - khác version → `130009`, không gọi CM; FE reload/render lại nội dung hiện hành.
+5. Thiếu policy bắt buộc → `130008` (không gọi CM).
 6. Build `custPolicyDTO` 06 field theo `policy.name` (`1` nếu id có trong `policy_id`, ngược lại `0`) → `updateCustPolicy(isdn, dto)`:
    - `code=0` → tiếp tục;
    - `code!=0` → ghi log `code/description`, không retry, tiếp tục;
    - lỗi kỹ thuật → tổng tối đa 3 lần, vẫn lỗi → ghi log, tiếp tục.
 7. INSERT/UPDATE `log_privacy_policy` (`user_id`, `isdn`, `confirm_ids`, `is_consent=1`, `type`, `policy_version`) → lỗi DB → `000001`.
-8. Cập nhật `session['consent_check']['need_update'] = false`.
+8. Sau khi ghi local thành công, dual-write `vt_member.is_update_policy=1`, `vt_member.policy_id=<confirm_ids>` để tương thích luồng cũ; không dùng làm source of truth.
+9. Cập nhật `session['consent_check']` với `need_update=false`, `type`, `policy_ids`.
 
 **Response**: `{"errorCode":"000000","message":"Successful","data":null}` → FE reload trang hiện tại.
 
@@ -283,16 +297,17 @@ Bổ sung so với TLGP v1.0: hiển thị `policy.note` dưới điều khoản
 
 | `errorCode` | Message | Xử lý FE |
 |---|---|---|
-| `000001` | Hệ thống đang bận, vui lòng thử lại sau. | Giữ popup, hiển thị lỗi |
-| `000002` | Require login. / Vui lòng đăng nhập để thực hiện chức năng này | Reload trang (phiên đã hết hạn) |
+| `000001` | Hệ thống đang bận, vui lòng thử lại sau. | Nếu lỗi xảy ra khi tải cấu hình/nội dung Consent → fail-open lần đăng nhập hiện tại; nếu lỗi khi ghi `log_privacy_policy` → giữ popup, hiển thị lỗi, không hoàn tất Consent |
+| `000002` | Require login. / Vui lòng đăng nhập để thực hiện chức năng này | Reload/điều hướng đăng nhập theo cơ chế hiện tại |
 | `130002` | Sai định dạng tham số truyền vào! | Giữ popup, hiển thị lỗi |
 | `130003` | Nhập id không tồn tại! | Giữ popup, hiển thị lỗi |
-| `130004` | Không tìm thấy Văn bản Consent hiện hành. | Hiển thị lỗi hệ thống; không cho xác nhận |
-| `130005` | Không tìm thấy Phụ lục Consent phù hợp. | Hiển thị lỗi hệ thống; không cho xác nhận |
-| `130006` | Không tìm thấy danh sách điều khoản Consent. | Hiển thị lỗi hệ thống; không cho xác nhận |
-| `130007` | Vui lòng xác nhận đầy đủ các điều khoản bắt buộc. | Giữ popup, hiển thị lỗi |
-| `130008` | Nhóm tuổi không hợp lệ. | Quay lại Popup chọn nhóm tuổi |
-| Lỗi mạng/HTTP | — | Hiển thị "Hệ thống đang bận, vui lòng thử lại sau!" |
+| `130004` | Nhóm tuổi không hợp lệ. | Quay lại Popup chọn nhóm tuổi |
+| `130005` | Không tìm thấy Văn bản Consent hiện hành. | Ghi log và fail-open lần đăng nhập hiện tại; không ghi local Consent |
+| `130006` | Không tìm thấy Phụ lục Consent phù hợp. | Ghi log và fail-open lần đăng nhập hiện tại; không ghi local Consent |
+| `130007` | Không tìm thấy danh sách điều khoản Consent. | Ghi log và fail-open lần đăng nhập hiện tại; không ghi local Consent |
+| `130008` | Vui lòng xác nhận đầy đủ các điều khoản bắt buộc. | Giữ popup, hiển thị lỗi |
+| `130009` | Văn bản Consent đã được cập nhật. Vui lòng tải lại nội dung. | Reload/render lại nội dung Consent current trước khi cho phép xác nhận |
+| Lỗi mạng/HTTP | — | Xử lý theo cơ chế lỗi hiện tại; nếu là lỗi CM check thuộc rule fallback thì không hiện popup lần này |
 
 Mã lỗi CM không trả về FE.
 
@@ -304,8 +319,23 @@ Xử lý:
 
 1. `actionLogout` nhận tham số `consent_skip=1` → sau `Yii::$app->user->logout()` (hủy session) ghi lại `session['consent_skip_autologin'] = true` (cùng cơ chế giữ `recent_keywords` hiện có).
 2. `AppController::beforeAction`: bỏ qua nhánh tự đăng nhập MSISDN nếu có `consent_skip_autologin`.
-3. User xem tiếp ở chế độ khách; khi user chủ động đăng nhập bằng form → xóa cờ `consent_skip_autologin` → luồng Consent chạy lại tại `afterLogin`.
+3. Sau logout, redirect về màn hình đăng nhập. Khi user chủ động đăng nhập lại bằng form → xóa cờ `consent_skip_autologin` → luồng Consent chạy lại tại `afterLogin`.
 4. Cờ hết hiệu lực khi session hết hạn.
+
+### 3.4 UC02 – Xem lại chính sách đã Consent
+
+Giữ nguyên nghiệp vụ Menu **Chính sách** theo TLGP App v1.3; Web/Wap chỉ khác cách lấy/render dữ liệu.
+
+| Nội dung | Xử lý Web/Wap |
+|---|---|
+| Điểm truy cập | Menu **Chính sách** sau đăng nhập |
+| Nguồn `type`, `policy_ids` | Dữ liệu tương đương kết quả check Consent, lưu trong `session['consent_check']` khi xác định được; có thể lấy lại qua `ConsentService` theo code hiện tại |
+| Lấy Văn bản/Phụ lục | Server lấy `consent_config`/policy; nếu có `type`, trình duyệt parse Phụ lục JSON string tương ứng |
+| Hiển thị policy đã Consent | Đánh dấu các policy có ID thuộc `policy_ids` ở trạng thái readonly |
+| Quyền thao tác | Chỉ xem; không cho thay đổi/rút Consent |
+| Trường hợp `type=null` | Giữ nguyên rule App: không tự suy diễn nhóm tuổi; hiển thị thông tin policy/Văn bản chung theo dữ liệu hiện có, không hiển thị Phụ lục theo nhóm tuổi |
+
+Không bổ sung nghiệp vụ mới cho Menu Chính sách ngoài phạm vi đã có ở App v1.3.
 
 ## 4. Business Rules (Web/Wap)
 
@@ -314,12 +344,18 @@ Xử lý:
 | BR-W01 | Kiểm tra Consent đúng 1 lần cho mỗi lần đăng nhập (form hoặc MSISDN), tại `afterLogin`; không gọi CM theo từng lần tải trang |
 | BR-W02 | Cờ session `consent_check` luôn gắn `user_id`; không dùng cờ của user khác |
 | BR-W03 | Session tồn tại trước thời điểm deploy (chưa có cờ) không được kiểm tra; kiểm tra ở lần đăng nhập kế tiếp |
-| BR-W04 | Popup chọn nhóm tuổi gồm 3 nút; "Không phải bây giờ" → đăng xuất (đáp ứng BR06 – chặn sử dụng khi chưa Consent) |
+| BR-W04 | Popup chọn nhóm tuổi gồm 3 nút; "Không phải bây giờ" → đăng xuất và redirect màn hình đăng nhập |
 | BR-W05 | Sau "Không phải bây giờ", tạm dừng tự đăng nhập MSISDN trong phiên để tránh vòng lặp |
 | BR-W06 | Logic JS checkbox hiện có (`coder.js`) được giữ nguyên; không build lại `app.min.js` trong phạm vi này |
-| BR-W07 | Mã lỗi hiện có giữ nguyên ý nghĩa (`130002`, `130003`); lỗi nhóm tuổi dùng `130008` |
+| BR-W07 | Dùng cùng danh mục mã lỗi App: `130002` sai định dạng, `130003` ID không tồn tại, `130004` nhóm tuổi, `130005-130007` lỗi dữ liệu nội dung, `130008` thiếu policy bắt buộc, `130009` lệch version |
 | BR-W08 | CM: mỗi operation tối đa 3 lần gọi (tính cả lần đầu), timeout 5s/lần, chỉ gọi lại khi lỗi kỹ thuật; không có cờ bật/tắt tích hợp |
-| BR-W09 | Các rule BR01–BR17 của TLGP v1.0 giữ nguyên hiệu lực, trừ phần mô tả endpoint App |
+| BR-W09 | Các rule nghiệp vụ của TLGP App v1.3 giữ nguyên hiệu lực; Web/Wap chỉ khác cơ chế session/server-render/AJAX |
+| BR-W10 | Lỗi đọc `consent_config` hoặc thiếu Văn bản/Phụ lục/danh sách policy → fail-open trong lần đăng nhập hiện tại; không ghi local Consent, lần sau kiểm tra lại |
+| BR-W11 | `policy_version` render cho khách hàng phải được gửi lại khi SAVE và validate với current; khác version → `130009` |
+| BR-W12 | `policy.note` hiển thị dưới `description` khi có dữ liệu, không tham gia validation và không suy diễn từ `is_editable` |
+| BR-W13 | MH02 có nút **Quay lại** MH01 để chọn lại nhóm tuổi; chưa lưu Consent |
+| BR-W14 | Sau khi ghi local thành công, dual-write `vt_member.is_update_policy=1`, `vt_member.policy_id=<confirm_ids>` để tương thích; không dùng làm source of truth |
+| BR-W15 | Menu **Chính sách** có trên Web/Wap, readonly và giữ nguyên nghiệp vụ App |
 
 ## 5. Tích hợp và dữ liệu
 
@@ -338,7 +374,7 @@ Lưu ý từ PYC-64913: `updateCustPolicy` luôn lưu 2 điều khoản đầu =
 
 ### 5.2 Bảng `policy` (DB `imuzik`) – reuse
 
-Hiện trạng: id 1–6 `is_active=0` (bộ cũ, giữ nguyên); id 7–12 `is_active=1`, `sortorder` 1–6, `is_required` = 1,1,0,0,0,0; có cột `note`; chưa có `is_editable`.
+Hiện trạng: id 1–6 `is_active=0` (bộ cũ, giữ nguyên); id 7–12 `is_active=1`, `sortorder` 1–6, `is_required` = 1,1,0,0,0,0; có cột `note`; chưa có `is_editable`. `note` được dùng để lưu ghi chú hiển thị độc lập dưới `description`, không tham gia validation.
 
 ```sql
 ALTER TABLE policy ADD COLUMN is_editable TINYINT(1) NOT NULL DEFAULT 0;
@@ -350,8 +386,8 @@ UPDATE policy SET name = 'marketingAdvertising' WHERE id = 10;
 UPDATE policy SET name = 'researchMarket'       WHERE id = 11;
 UPDATE policy SET name = 'tradePromotion'       WHERE id = 12;
 
--- Chờ chốt (Mục 7, điểm 1): giá trị tick mặc định
-UPDATE policy SET is_editable = 1 WHERE id IN (7, 8);
+-- Giá trị `is_editable` thực tế do Dev xác nhận theo code/data hiện tại;
+-- BA chỉ khóa semantics: field này xác định trạng thái tick mặc định.
 ```
 
 ### 5.3 Bảng `consent_config` (DB `imuzik`)
@@ -374,10 +410,23 @@ CREATE TABLE consent_config (
 
 Dữ liệu khởi tạo version `1.0`:
 
+`policy_version` được xác lập khi INSERT version mới; UPDATE bản ghi hiện tại không tự tăng `policy_version`.
+
 - `document_content`: Điều 1–12 của "Văn bản chấp thuận về xử lý và bảo vệ dữ liệu cá nhân tại VTT", HTML dùng class hiện có (`legal-doc`, `article-title`, `legal-num`, `legal-sub-num`, `legal-bullet`).
-- `appendix_type_0_content`: Phụ lục 01 – tiêu đề, câu dẫn, "Lưu ý của Viettel".
-- `appendix_type_1_content`: Phụ lục 02 – tiêu đề, câu dẫn, "Lưu ý của Viettel", "Xác nhận của người giám hộ, người đại diện theo pháp luật".
-- Bảng 06 điều khoản **không** nằm trong HTML (render từ `policy`); bỏ dòng chữ ký/ngày ký.
+- `appendix_type_0_content`, `appendix_type_1_content`: lưu **JSON string** theo cấu trúc `title`, `warning`, `parent_content`, `confirm_content`; không lưu Phụ lục thành HTML riêng.
+- Bảng 06 điều khoản lấy từ `policy`; `policy.note` hiển thị dưới `description` khi có dữ liệu.
+- Trình duyệt chọn chuỗi Phụ lục theo `type`, parse JSON và render theo design.
+
+Ví dụ cấu trúc chuỗi Phụ lục:
+
+```json
+{
+  "title": "Văn bản chấp thuận về việc xử lý và bảo vệ dữ liệu cá nhân",
+  "warning": "",
+  "parent_content": "Tôi xác nhận đã đọc, hiểu và đồng ý đối với toàn bộ nội dung và các mục đích xử lý dữ liệu theo quy định tại Văn bản chấp thuận về xử lý và bảo vệ dữ liệu cá nhân.",
+  "confirm_content": ""
+}
+```
 
 ### 5.4 Bảng `log_privacy_policy` (DB `imuzik`)
 
@@ -399,27 +448,48 @@ CREATE TABLE log_privacy_policy (
 
 Mỗi user 1 bản ghi hiện hành (INSERT nếu chưa có, UPDATE nếu đã có).
 
+### 5.5 Danh mục mã lỗi Consent Web/Wap
+
+Web/Wap dùng cùng semantic mã lỗi với App:
+
+| `errorCode` | `message` | Phạm vi |
+|---|---|---|
+| `130002` | `Sai định dạng tham số truyền vào!` | `policy_id` sai định dạng |
+| `130003` | `Nhập id không tồn tại!` | `policy_id` không tồn tại/không active |
+| `130004` | `Nhóm tuổi không hợp lệ.` | `type` thiếu/ngoài `{0,1}` |
+| `130005` | `Không tìm thấy Văn bản Consent hiện hành.` | Thiếu `document_content`; fail-open khi tải nội dung |
+| `130006` | `Không tìm thấy Phụ lục Consent phù hợp.` | Thiếu Phụ lục theo `type`; fail-open khi tải nội dung |
+| `130007` | `Không tìm thấy danh sách điều khoản Consent.` | Không có policy active; fail-open khi tải nội dung |
+| `130008` | `Vui lòng xác nhận đầy đủ các điều khoản bắt buộc.` | Thiếu policy `is_required=1` khi submit |
+| `130009` | `Văn bản Consent đã được cập nhật. Vui lòng tải lại nội dung.` | `policy_version` submit khác current version |
+
 ## 6. Ràng buộc triển khai
 
 | STT | Ràng buộc |
 |---:|---|
-| 1 | Chỉ áp dụng Web/Wap; API App/Miniapp giữ nguyên trong giai đoạn này |
+| 1 | Chỉ áp dụng triển khai Web/Wap; code App/Miniapp không thuộc phạm vi tài liệu này và thực hiện theo TLGP App riêng. |
 | 2 | Server Web/Wap (test, prod) phải mở kết nối tới `10.58.71.238:8701` |
 | 3 | Script DB (Mục 5) chạy trước khi deploy code |
 | 4 | Không build lại `app.min.js`; JS mới viết inline trong `_confirm-policy.php` |
-| 5 | Nội dung `consent_config` render nguyên bản HTML – chỉ DBA/BA có quyền ghi |
-| 6 | Không triển khai CMS, xem lại/rút Consent, xác minh người giám hộ, đồng bộ bù CM |
+| 5 | `document_content` lưu HTML; 02 Phụ lục lưu JSON string và được parse/render theo `type`. |
+| 6 | Menu **Chính sách** thuộc phạm vi và chỉ cho xem; không triển khai thay đổi/rút Consent, CMS, xác minh người giám hộ hoặc đồng bộ bù CM. |
+| 7 | `policy_version` phải được gửi lại khi SAVE và validate với current version. |
+| 8 | Lỗi cấu hình/nội dung Consent thuộc fail-open: bỏ qua Consent lần đăng nhập hiện tại, không ghi local, lần sau kiểm tra lại. |
+| 9 | Sau khi lưu local thành công, dual-write `vt_member.is_update_policy/policy_id` chỉ để tương thích; `log_privacy_policy` vẫn là source of truth. |
 
-## 7. Các điểm đã chốt (áp dụng theo đề xuất khi xác nhận)
+## 7. Các điểm chốt và technical cần Dev xác nhận
 
 | # | Nội dung | Đề xuất |
 |---:|---|---|
-| 1 | Giá trị `is_editable` từng điều khoản | id 7, 8 = 1; id 9–12 = 0 |
+| 1 | Giá trị kỹ thuật `is_editable` từng điều khoản | Dev xác nhận theo code/data hiện tại; BA chỉ khóa semantics trạng thái tick mặc định |
 | 2 | Vị trí script SQL | Commit `docs/sql/PYC-84821_consent.sql` hoặc gửi DBA ngoài repo |
-| 3 | Nội dung HTML `consent_config` | Chuyển từ PDF như Mục 5.3, `policy_version = '1.0'` |
-| 4 | Tương thích App cũ | Khi Web/Wap lưu Consent, đồng thời cập nhật `vt_member.is_update_policy=1`, `policy_id` để App (luồng cũ) không hỏi lại – không dùng làm source of truth |
-| 5 | Nút "Quay lại" trên popup văn bản | Có, quay về Popup chọn nhóm tuổi |
-| 6 | Lỗi cấu hình `consent_config` khi check sau login | `need_update=false` + ghi log (không chặn user vì lỗi cấu hình) |
-| 7 | Thông tin CM cần xác nhận | URL prod, xác thực, định dạng `isdn` (84…/0…), dùng chung interface `InterfaceSaleMyclip` |
-| 8 | `session.gc_maxlifetime` thực tế trên server | Hỏi vận hành |
-| 9 | Phạm vi Miniapp (TLGP md mới bổ sung) | Ngoài phạm vi giai đoạn Web/Wap |
+| 3 | Nội dung `consent_config` | `document_content` là HTML; 02 Phụ lục là JSON string theo Mục 5.3; version xác lập khi INSERT version mới |
+| 4 | Tương thích luồng cũ | **Đã chốt:** sau khi Web/Wap lưu local thành công, dual-write `vt_member.is_update_policy=1`, `policy_id=<confirm_ids>`; không dùng làm source of truth |
+| 5 | Nút "Quay lại" trên popup văn bản | **Đã chốt:** có, quay về Popup chọn nhóm tuổi; chưa lưu Consent |
+| 6 | Lỗi cấu hình/nội dung Consent | **Đã chốt fail-open:** `need_update=false` trong lần đăng nhập hiện tại + ghi log; không ghi `log_privacy_policy`; lần đăng nhập sau kiểm tra lại |
+| 7 | `policy.note` | **Đã chốt:** lưu/đọc từ `policy.note`, hiển thị dưới `description`, không tham gia validation |
+| 8 | `policy_version` khi SAVE | **Đã chốt:** gửi lại version đã render; khác current → `130009` |
+| 9 | Menu Chính sách | **Giữ nguyên nghiệp vụ App:** có trên Web/Wap, readonly; chưa bổ sung yêu cầu mới ngoài baseline |
+| 10 | Thông tin CM cần xác nhận | URL prod, xác thực, định dạng `isdn` (84…/0…), dùng chung interface `InterfaceSaleMyclip` |
+| 11 | `session.gc_maxlifetime` thực tế trên server | Hỏi vận hành |
+| 12 | Phạm vi Miniapp | Ngoài phạm vi giai đoạn Web/Wap |
