@@ -7,8 +7,8 @@ Biểu mẫu rút gọn - áp dụng cho yêu cầu thay đổi/nâng cấp ch�
 | Thông tin | Nội dung |
 |---|---|
 | Tên yêu cầu / dự án | Cập nhật và quản lý Consent khách hàng trên Imuzik |
-| Phiên bản | 1.2 |
-| Ngày ban hành | 05/10/2026 |
+| Phiên bản | 1.3 |
+| Ngày ban hành | 06/10/2026 |
 | PIC | SơnLH21 |
 | Trạng thái | Baseline phát triển |
 
@@ -19,6 +19,7 @@ Biểu mẫu rút gọn - áp dụng cho yêu cầu thay đổi/nâng cấp ch�
 | 05/10/2026 | 1.0 | SơnLH21 | Toàn bộ tài liệu | Ban hành baseline giải pháp Consent Imuzik để triển khai FE/BE/DB và tích hợp CM |
 | 05/10/2026 | 1.1 | SơnLH21 | Mục 2-5 | Cập nhật sau review Dev: chuẩn hóa mã lỗi; cập nhật popup nhóm tuổi theo design; bổ sung menu xem lại chính sách; chốt `log_privacy_policy` tại DB `imuzik`; chuẩn hóa cấu trúc Phụ lục dạng JSON string |
 | 05/10/2026 | 1.2 | SơnLH21 | Mục 2-5 | Chuẩn hóa tài liệu theo một luồng API dùng `token`; loại bỏ mô tả tách riêng cơ chế Web/Wap. Biến thể Web/Wap sẽ được Dev clone/điều chỉnh ở bản triển khai riêng |
+| 06/10/2026 | 1.3 | SơnLH21 | Mục 2-5 | Đồng bộ nghiệp vụ App/Web-Wap: chuẩn hóa fail-open khi lỗi cấu hình/nội dung Consent; bổ sung `policy.note`; nút Quay lại; dual-write `vt_member` để tương thích; giữ nguyên phạm vi Menu Chính sách |
 
 ## 2. Thông tin tổng quan
 
@@ -93,15 +94,16 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 | `POST policy/policy` | Reuse endpoint; bổ sung `type`, `policy_version`; xác thực bằng `token`; validate version/policy bắt buộc, gọi `updateCustPolicy`, sau đó ghi `log_privacy_policy` |
 | Popup xác minh người dùng | Cập nhật theo design: 02 button nhóm tuổi và action **Không phải bây giờ**; không có radio/button **Tiếp tục** |
 | Menu Chính sách | Bổ sung điểm truy cập để khách hàng xem lại chính sách đã Consent; không cho phép thay đổi/rút Consent trong phạm vi tài liệu |
-| `policy` | Reuse bảng hiện tại; dùng `name`, `description`, `is_required`, `is_editable`, `is_active`, `sortorder` |
+| `policy` | Reuse bảng hiện tại; dùng `name`, `description`, `note`, `is_required`, `is_editable`, `is_active`, `sortorder` |
 | `CONSENT_CONFIG` | Quản lý `policy_version`, Văn bản Consent, 02 Phụ lục dạng JSON string và trạng thái current/active |
 | `log_privacy_policy` | Bổ sung tại DB `imuzik` để lưu snapshot Consent local theo user/MSISDN/version/type |
-| `vt_member.is_update_policy`, `vt_member.policy_id` | Không sử dụng làm source of truth cho nghiệp vụ Consent mới |
+| `vt_member.is_update_policy`, `vt_member.policy_id` | Không sử dụng làm source of truth; sau khi lưu Consent local thành công, dual-write hai field này để tương thích các luồng cũ còn tham chiếu |
 
 ### 2.6 Nguyên tắc giải pháp
 
 - `policy.id` là khóa kỹ thuật dùng trong API; `policy.name` là key mapping CM; `sortorder` chỉ xác định thứ tự Điều khoản 1-6.
 - `is_required` xác định điều khoản bắt buộc; `is_editable` chỉ xác định trạng thái tick mặc định trên FE. Chi tiết xử lý kỹ thuật giá trị field do Dev triển khai theo cấu trúc hiện tại.
+- `policy.note` lưu nội dung ghi chú bổ sung của từng điều khoản; nếu có dữ liệu thì hiển thị dưới `description`, không tham gia validation và không suy diễn từ `is_editable`.
 - `CONSENT_CONFIG` có 01 Văn bản Consent HTML dùng chung và 02 Phụ lục theo `type`; mỗi Phụ lục lưu trong một field dưới dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`.
 - BE chọn đúng Phụ lục theo `type` và trả nguyên chuỗi `appendix_content`; FE parse JSON string để render.
 - `GET policy/check-policy` trả thêm `type`, `policy_ids` để phục vụ chức năng xem lại chính sách.
@@ -109,6 +111,8 @@ Yêu cầu mới cập nhật luồng Consent theo hướng:
 - `policy_version` được xác lập khi INSERT bản ghi `CONSENT_CONFIG` mới; UPDATE bản ghi hiện tại không tự tăng version.
 - Local log cùng `current_policy_version` được công nhận là đã hoàn tất Consent mà không đối chiếu lại `confirm_ids`.
 - `getCustPolicy` và `updateCustPolicy` tuân thủ rule retry/fallback mô tả tại Mục 3.
+- Khi lỗi đọc `CONSENT_CONFIG` hoặc thiếu Văn bản/Phụ lục/danh sách policy do lỗi cấu hình dữ liệu, hệ thống fail-open: bỏ qua yêu cầu Consent trong lần đăng nhập hiện tại, không tạo/cập nhật `log_privacy_policy`; lần đăng nhập sau thực hiện kiểm tra lại.
+- Sau khi ghi `log_privacy_policy` thành công, hệ thống dual-write `vt_member.is_update_policy=1` và `vt_member.policy_id=<confirm_ids>` để tương thích luồng cũ; các field này không trở lại làm source of truth.
 
 ## 3. Yêu cầu về chức năng
 
@@ -144,8 +148,12 @@ sequenceDiagram
     FE->>BE: GET policy/check-policy(token)
 
     BE->>DB: Lấy CONSENT_CONFIG current/active
-    DB-->>BE: current_policy_version
-    BE->>DB: Kiểm tra log_privacy_policy
+    alt Lỗi đọc/không có cấu hình current-active
+        BE-->>FE: is_update=false (fail-open lần đăng nhập hiện tại)
+        FE-->>KH: Tiếp tục vào Home, không ghi local Consent
+    else Có cấu hình hợp lệ
+        DB-->>BE: current_policy_version
+        BE->>DB: Kiểm tra log_privacy_policy
 
     alt Có local log cùng current_policy_version
         DB-->>BE: type + confirm_ids
@@ -169,6 +177,7 @@ sequenceDiagram
             end
         end
     end
+    end
 
     alt is_update=true
         FE-->>KH: Hiển thị popup Xác minh người dùng
@@ -183,25 +192,31 @@ sequenceDiagram
             DB-->>BE: policy_version + document_content + appendix JSON string
             BE->>DB: Lấy policy is_active=1 ORDER BY sortorder
             BE->>BE: Chọn appendix_content theo type
-            BE-->>FE: document_content + appendix_content + policies
-            FE-->>KH: Parse Phụ lục và hiển thị Văn bản + policy
-            KH->>FE: Chọn policy và nhấn Xác nhận/Đồng ý
-            FE->>BE: POST policy/policy(token, type, policy_version, policy_id)
-            BE->>DB: Validate policy_version + policy active + is_required
-            alt Validation không hợp lệ
-                BE-->>FE: Validation error
-                FE-->>KH: Giữ popup và hiển thị lỗi
-            else Validation hợp lệ
-                BE->>CM: updateCustPolicy(isdn, custPolicyDTO)
-                alt CM code=0
-                    BE->>DB: Insert/Update log_privacy_policy
-                else CM code!=0
-                    BE->>DB: Insert/Update log_privacy_policy theo fallback
-                else CM timeout/lỗi server sau 3 retry
-                    BE->>DB: Insert/Update log_privacy_policy theo fallback
+            alt Thiếu Văn bản/Phụ lục/policy hoặc lỗi cấu hình dữ liệu
+                BE-->>FE: Config/content error (fail-open)
+                FE-->>KH: Bỏ qua Consent lần này, tiếp tục Home
+            else Dữ liệu hợp lệ
+                BE-->>FE: document_content + appendix_content + policies(note)
+                FE-->>KH: Parse Phụ lục và hiển thị Văn bản + policy/note
+                KH->>FE: Chọn policy và nhấn Xác nhận/Đồng ý
+                FE->>BE: POST policy/policy(token, type, policy_version, policy_id)
+                BE->>DB: Validate policy_version + policy active + is_required
+                alt Validation không hợp lệ
+                    BE-->>FE: Validation error
+                    FE-->>KH: Giữ popup và hiển thị lỗi
+                else Validation hợp lệ
+                    BE->>CM: updateCustPolicy(isdn, custPolicyDTO)
+                    alt CM code=0
+                        BE->>DB: Insert/Update log_privacy_policy
+                    else CM code!=0
+                        BE->>DB: Insert/Update log_privacy_policy theo fallback
+                    else CM timeout/lỗi server sau 3 retry
+                        BE->>DB: Insert/Update log_privacy_policy theo fallback
+                    end
+                    BE->>DB: Dual-write vt_member.is_update_policy/policy_id (compatibility)
+                    BE-->>FE: Success
+                    FE-->>KH: Đóng popup và tiếp tục vào Home
                 end
-                BE-->>FE: Success
-                FE-->>KH: Đóng popup và tiếp tục vào Home
             end
         end
     else is_update=false
@@ -267,7 +282,7 @@ Imuzik BE thực hiện:
 
 1. Query bản ghi `CONSENT_CONFIG` đang `is_current=1` và `status=active`.
 2. Lấy `policy_version` của bản ghi này và gán nội bộ thành `current_policy_version`.
-3. Nếu lỗi truy vấn DB **hoặc truy vấn thành công nhưng không tồn tại cấu hình current/active** → coi là lỗi cấu hình/hệ thống, dừng xử lý và trả `errorCode=000001`.
+3. Nếu lỗi đọc `CONSENT_CONFIG` **hoặc không tồn tại cấu hình current/active** → ghi log lỗi và xử lý fail-open: `GET policy/check-policy` trả success với `is_update=false`, không tạo/cập nhật `log_privacy_policy`, cho phép tiếp tục đăng nhập trong lần hiện tại. Lần đăng nhập sau hệ thống thực hiện kiểm tra lại.
 
 **Output nội bộ**
 
@@ -473,14 +488,14 @@ Imuzik BE thực hiện:
    - `type = 0` → lấy chuỗi `appendix_type_0_content`;
    - `type = 1` → lấy chuỗi `appendix_type_1_content`.
 6. Trả nguyên chuỗi Phụ lục đã chọn ra field `appendix_content`; BE không tách thành nhiều field con.
-7. Lấy danh sách policy thỏa mãn `policy.is_active = 1`, sắp xếp theo `policy.sortorder ASC`.
+7. Lấy danh sách policy thỏa mãn `policy.is_active = 1`, sắp xếp theo `policy.sortorder ASC`, bao gồm `note` nếu có.
 8. Nếu toàn bộ dữ liệu hợp lệ → trả response thành công cho FE; xử lý response tại Bước 7.1.
-9. Nếu phát sinh lỗi → trả response lỗi tương ứng cho FE; xử lý response tại Bước 7.2.
+9. Nếu lỗi đọc cấu hình hoặc thiếu `document_content`/Phụ lục/danh sách policy → trả mã lỗi tương ứng để FE xử lý fail-open tại Bước 7.2; không tạo/cập nhật `log_privacy_policy`. Các lỗi request/auth/validation khác xử lý theo mã lỗi thông thường.
 
 **Truy vấn policy**
 
 ```sql
-SELECT id, description, is_required, is_editable
+SELECT id, description, note, is_required, is_editable
 FROM policy
 WHERE is_active = 1
 ORDER BY sortorder ASC;
@@ -519,6 +534,7 @@ ORDER BY sortorder ASC;
       {
         "id": 1,
         "description": "<Nội dung điều khoản>",
+        "note": "<Ghi chú điều khoản hoặc null>",
         "is_required": 1,
         "is_editable": 0
       }
@@ -538,6 +554,7 @@ Trong đó:
   - `parent_content`;
   - `confirm_content`.
 - FE parse chuỗi `appendix_content` để lấy các thành phần và render; BE không trả các nội dung Phụ lục thành nhiều field riêng.
+- `note`: ghi chú bổ sung của policy; có thể `null`/rỗng.
 - `is_required`: xác định policy bắt buộc khách hàng phải Consent để được tiếp tục.
 - `is_editable`: xác định trạng thái mặc định tick của policy trên FE.
 - `sortorder`: sử dụng tại BE để xác định thứ tự Điều khoản 1-6 và thứ tự trả danh sách policy; không bắt buộc trả về FE.
@@ -548,6 +565,7 @@ Trong đó:
 - Hiển thị `document_content` - Văn bản Consent dùng chung.
 - Parse `appendix_content` và hiển thị nội dung Phụ lục tương ứng nhóm tuổi khách hàng đã chọn.
 - Hiển thị danh sách policy theo đúng thứ tự BE trả về.
+- Nếu `policy.note` có dữ liệu → hiển thị dưới `description`; nếu `null`/rỗng → không hiển thị vùng ghi chú. `note` không tham gia validation.
 - Thiết lập trạng thái tick mặc định của từng policy theo `is_editable`.
 - Bổ sung control **Xác nhận chung** dạng tick chọn trên popup:
   - khi khách hàng tick **Xác nhận chung** → FE tự động tick toàn bộ policy đang hiển thị, bao gồm policy bắt buộc và không bắt buộc;
@@ -557,6 +575,8 @@ Trong đó:
   - nếu toàn bộ policy bắt buộc đã được tick → enable button **Xác nhận/Đồng ý**.
 - Các policy có `is_required = 0` không ảnh hưởng điều kiện cho phép khách hàng tiếp tục.
 
+- Có nút **Quay lại**: khi bấm, đóng MH02 và quay về MH01 để khách hàng chọn lại nhóm tuổi; chưa ghi nhận Consent và chưa gọi API lưu. Sau khi chọn lại `type`, FE thực hiện lại Bước 5.
+
 Khi khách hàng nhấn **Xác nhận/Đồng ý** → chuyển Bước 8.
 
 ###### Bước 7.2 - Response lỗi
@@ -565,15 +585,15 @@ FE xử lý response lỗi của `GET policy/list-policy` như sau:
 
 | `errorCode` | `message` | Xử lý FE |
 |---|---|---|
-| `000001` | `Hệ thống đang bận, vui lòng thử lại sau.` | Hiển thị lỗi hệ thống; không hiển thị nội dung Consent để xác nhận |
+| `000001` | `Hệ thống đang bận, vui lòng thử lại sau.` | Nếu phát sinh do lỗi đọc cấu hình/nội dung tại Bước 6: ghi log và fail-open, đóng luồng Consent và tiếp tục Home; không ghi local Consent. Các lỗi hệ thống khác xử lý theo cơ chế hiện tại |
 | `000003` | `Unknown method` | Hiển thị lỗi kỹ thuật; không tiếp tục xử lý |
 | `300002` | `Invalid authorization code` | Dừng xử lý; thực hiện lại cơ chế authorization theo luồng hiện tại |
 | `000002` | `Require login.` | Yêu cầu khách hàng đăng nhập lại |
 | `000008` | `Token không hợp lệ.` | Yêu cầu khách hàng đăng nhập lại |
 | `130004` | `Nhóm tuổi không hợp lệ.` | Quay lại popup **Xác minh người dùng** để khách hàng chọn lại nhóm tuổi |
-| `130005` | `Không tìm thấy Văn bản Consent hiện hành.` | Hiển thị lỗi hệ thống; không cho tiếp tục xác nhận Consent |
-| `130006` | `Không tìm thấy Phụ lục Consent phù hợp.` | Hiển thị lỗi hệ thống; không cho tiếp tục xác nhận Consent |
-| `130007` | `Không tìm thấy danh sách điều khoản Consent.` | Hiển thị lỗi hệ thống; không cho tiếp tục xác nhận Consent |
+| `130005` | `Không tìm thấy Văn bản Consent hiện hành.` | Ghi log và fail-open: bỏ qua Consent trong lần đăng nhập hiện tại, tiếp tục Home; không ghi `log_privacy_policy` |
+| `130006` | `Không tìm thấy Phụ lục Consent phù hợp.` | Ghi log và fail-open: bỏ qua Consent trong lần đăng nhập hiện tại, tiếp tục Home; không ghi `log_privacy_policy` |
+| `130007` | `Không tìm thấy danh sách điều khoản Consent.` | Ghi log và fail-open: bỏ qua Consent trong lần đăng nhập hiện tại, tiếp tục Home; không ghi `log_privacy_policy` |
 
 **Ví dụ response lỗi**
 
@@ -741,8 +761,9 @@ Bảng `log_privacy_policy` được lưu tại DB **`imuzik`**. Imuzik BE ghi n
 
 - Nếu user chưa có bản ghi → INSERT.
 - Nếu user đã có bản ghi → UPDATE bản ghi hiện tại theo Consent mới nhất.
-- Nếu ghi `log_privacy_policy` thành công → chuyển Bước 12.1.
-- Nếu ghi DB lỗi → trả response lỗi cho FE → xử lý tại Bước 12.2.
+- Nếu ghi `log_privacy_policy` thành công → đồng thời dual-write `vt_member.is_update_policy=1` và `vt_member.policy_id=<confirm_ids>` để tương thích các luồng cũ còn tham chiếu, sau đó chuyển Bước 12.1.
+- `vt_member` chỉ là dữ liệu compatibility; không được dùng lại để quyết định `is_update` hoặc thay thế `log_privacy_policy` làm source of truth. Cách transaction/xử lý lỗi của phần dual-write do Dev triển khai theo kiến trúc hiện tại.
+- Nếu ghi `log_privacy_policy` lỗi → trả response lỗi cho FE → xử lý tại Bước 12.2.
 
 ##### Bước 12 - Imuzik BE/FE: Trả response và xử lý response `POST policy/policy`
 
@@ -820,9 +841,11 @@ Popup **không có radio chọn nhóm tuổi và không có button Tiếp tục*
 | 6 | Điều khoản 4 | Checkbox | `policy` / `marketingAdvertising` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
 | 7 | Điều khoản 5 | Checkbox | `policy` / `researchMarket` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
 | 8 | Điều khoản 6 | Checkbox | `policy` / `tradePromotion` | Theo `is_editable` | Bắt buộc/tùy chọn theo `is_required` |
-| 9 | Xác nhận chung | Checkbox | Người dùng chọn | Chưa chọn | Khi tick, FE tự động tick toàn bộ policy đang hiển thị |
-| 10 | Xác nhận/Đồng ý | Button | `is_required` | Disable nếu còn policy bắt buộc chưa Consent | Khi bấm, FE gửi `type` + `policy_version` + danh sách `policy_id` sang BE để validate và lưu CM |
-| 11 | Thông báo lỗi | Message | Imuzik BE | Không có | Hiển thị khi request/validation/lưu Consent thất bại |
+| 9 | Ghi chú điều khoản | Text | `policy.note` | Theo dữ liệu | Hiển thị dưới `description` khi có dữ liệu; không tham gia validation |
+| 10 | Xác nhận chung | Checkbox | Người dùng chọn | Chưa chọn | Khi tick, FE tự động tick toàn bộ policy đang hiển thị |
+| 11 | Quay lại | Button/Action | Người dùng chọn | Hiển thị | Quay về MH01 để chọn lại nhóm tuổi; chưa lưu Consent |
+| 12 | Xác nhận/Đồng ý | Button | `is_required` | Disable nếu còn policy bắt buộc chưa Consent | Khi bấm, FE gửi `type` + `policy_version` + danh sách `policy_id` sang BE để validate và lưu CM |
+| 13 | Thông báo lỗi | Message | Imuzik BE | Không có | Hiển thị khi request/validation/lưu Consent thất bại |
 
 **MH03 - Menu Chính sách / Xem lại chính sách đã Consent**
 
@@ -864,6 +887,10 @@ Popup **không có radio chọn nhóm tuổi và không có button Tiếp tục*
 | BR20 | Mã `130002` giữ nghĩa `Sai định dạng tham số truyền vào!`; mã `130003` giữ nghĩa `Nhập id không tồn tại!` | Các mã lỗi mới bắt đầu từ `130004` |
 | BR21 | Tài liệu mô tả luồng API chuẩn trên App Imuzik, đăng nhập bằng SĐT | Biến thể Web/Wap do Dev clone/điều chỉnh ở bản triển khai riêng |
 | BR22 | Chức năng thay đổi/rút Consent sau đăng nhập không thuộc phạm vi tài liệu này | Menu Chính sách chỉ xem |
+| BR23 | Lỗi đọc `CONSENT_CONFIG` hoặc thiếu Văn bản/Phụ lục/danh sách policy do lỗi cấu hình dữ liệu → fail-open trong lần đăng nhập hiện tại | Không tạo/cập nhật `log_privacy_policy`; không coi khách hàng đã Consent; lần đăng nhập sau kiểm tra lại |
+| BR24 | `policy.note` là nội dung ghi chú độc lập của điều khoản | Có dữ liệu thì hiển thị dưới `description`; không tham gia validation và không suy diễn từ `is_editable` |
+| BR25 | MH02 có nút **Quay lại** về MH01 để chọn lại nhóm tuổi | Chưa ghi Consent khi quay lại |
+| BR26 | Sau khi ghi `log_privacy_policy` thành công, dual-write `vt_member.is_update_policy=1`, `vt_member.policy_id=<confirm_ids>` để tương thích luồng cũ | `vt_member` không trở lại làm source of truth |
 
 ### 3.2 UC02 - Xem lại chính sách đã Consent
 
@@ -917,6 +944,7 @@ Sau khi khách hàng xác nhận Consent thành công, FE sử dụng dữ liệ
 | `id` | ID policy dùng trong `policy_id` |
 | `name` | Key mapping trực tiếp với field CM |
 | `description` | Nội dung điều khoản hiển thị |
+| `note` | Ghi chú bổ sung hiển thị dưới điều khoản; không tham gia validation |
 | `is_required` | Xác định điều khoản bắt buộc Consent |
 | `is_editable` | Trạng thái tick mặc định trên FE; chi tiết kỹ thuật do Dev xử lý theo code/data hiện tại |
 | `is_active` | Trạng thái hiệu lực |
@@ -970,7 +998,7 @@ Mỗi user sử dụng một snapshot hiện hành: chưa có bản ghi thì INS
 | API/Thành phần | Thay đổi chính |
 |---|---|
 | `GET policy/check-policy` | Xác thực bằng `token`; trả `is_update`, `type`, `policy_ids` |
-| `GET policy/list-policy` | Bổ sung `type`; xác thực bằng `token`; trả `policy_version`, `document_content`, `appendix_content` dạng JSON string, `policies[]` |
+| `GET policy/list-policy` | Bổ sung `type`; xác thực bằng `token`; trả `policy_version`, `document_content`, `appendix_content` dạng JSON string, `policies[]` gồm `note` nếu có |
 | `POST policy/policy` | Bổ sung `type`, `policy_version`; xác thực bằng `token`; validate version/policy bắt buộc, gọi CM và ghi local log |
 | Menu Chính sách | Dùng `type`, `policy_ids` từ `GET policy/check-policy` và `GET policy/list-policy` để hiển thị readonly |
 
@@ -1007,7 +1035,7 @@ Mã lỗi CM chỉ ghi log tích hợp, không trả trực tiếp về FE trong
 | 3 | Imuzik tự quản lý version, Văn bản Consent, Phụ lục và rule policy; CM không quản lý `policyVersion` riêng cho Imuzik. |
 | 4 | Phụ lục được lưu theo từng `type` dưới dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`; FE chịu trách nhiệm parse để render. |
 | 5 | `log_privacy_policy` là source of truth local và được lưu tại DB `imuzik`, không lưu tại `imuziklog`. |
-| 6 | `vt_member.is_update_policy` và `vt_member.policy_id` không còn là source of truth của luồng Consent mới. |
+| 6 | `vt_member.is_update_policy` và `vt_member.policy_id` không còn là source of truth; sau khi lưu local thành công thực hiện dual-write để tương thích luồng cũ. |
 | 7 | `GET policy/list-policy` đổi cấu trúc response nên FE/BE phải release đồng bộ. |
 | 8 | FE phải gửi `policy_version` đã nhận từ `GET policy/list-policy`; BE chỉ lưu khi version này bằng `current_policy_version`. |
 | 9 | `policy_version` chỉ được xác lập khi INSERT bản ghi `CONSENT_CONFIG` mới; UPDATE bản ghi hiện tại không tự tăng version. |
@@ -1019,3 +1047,6 @@ Mã lỗi CM chỉ ghi log tích hợp, không trả trực tiếp về FE trong
 | 15 | Không gọi `getCustPolicy` lần 2 ngay trước `updateCustPolicy`; chấp nhận rủi ro ghi đè lựa chọn khi nhiều dịch vụ cùng cập nhật 06 field CM. |
 | 16 | `createDatetime` từ CM không được dùng để suy ra `policy_version` của Imuzik. |
 | 17 | Không triển khai CMS Consent hoặc xác minh thông tin người giám hộ trong phạm vi tài liệu này. |
+| 18 | Lỗi đọc `CONSENT_CONFIG` hoặc thiếu Văn bản/Phụ lục/danh sách policy do lỗi cấu hình dữ liệu xử lý fail-open trong lần đăng nhập hiện tại; không ghi local Consent và lần đăng nhập sau kiểm tra lại. |
+| 19 | `policy.note` được trả/hiển thị độc lập với `is_editable`; `note` không tham gia validation. |
+| 20 | MH02 có nút **Quay lại** để khách hàng chọn lại nhóm tuổi trước khi lưu Consent. |
