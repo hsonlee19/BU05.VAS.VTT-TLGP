@@ -198,9 +198,9 @@ Bổ sung bảng `consent_config` theo mô tả tại Mục 5.3 để quản lý
 
 Imuzik BE thực hiện:
 
-1. Query bản ghi `consent_config` đang `is_current=1` và `status=active`.
+1. Query bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1`.
 2. Lấy `policy_version` của bản ghi này và gán nội bộ thành `current_policy_version`.
-3. Nếu lỗi đọc `consent_config` **hoặc không tồn tại cấu hình current/active** → ghi log lỗi và xử lý fail-open: `GET policy/check-policy` trả success với `is_update=false`, không tạo/cập nhật `log_privacy_policy`, cho phép tiếp tục đăng nhập trong lần hiện tại. Lần đăng nhập sau hệ thống thực hiện kiểm tra lại.
+3. Nếu lỗi đọc `consent_config` **hoặc không tồn tại bản ghi thỏa đồng thời `is_current=1` và `status=1`** → ghi log lỗi và xử lý fail-open: `GET policy/check-policy` trả success với `is_update=false`, không tạo/cập nhật `log_privacy_policy`, cho phép tiếp tục đăng nhập trong lần hiện tại. Lần đăng nhập sau hệ thống thực hiện kiểm tra lại.
 
 **Output nội bộ**
 
@@ -441,7 +441,7 @@ Imuzik BE thực hiện:
    - `token` được truyền và còn hiệu lực;
    - `authorization_code` hợp lệ nếu có truyền;
    - `type ∈ {0,1}`.
-2. Query bản ghi `consent_config` đang `is_current=1` và `status=active`.
+2. Query bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1`.
 3. Lấy `policy_version` của bản ghi và gán nội bộ thành `current_policy_version`.
 4. Lấy `document_content` - Văn bản Consent HTML dùng chung cho cả 02 nhóm tuổi.
 5. Căn cứ `type` để lấy Phụ lục:
@@ -465,7 +465,7 @@ ORDER BY sortorder ASC;
 
 | `errorCode` | `message` | Trường hợp |
 |---|---|---|
-| `000001` | `Hệ thống đang bận, vui lòng thử lại sau.` | Lỗi truy vấn DB hoặc không tồn tại `consent_config` đang `is_current=1`, `status=active` |
+| `000001` | `Hệ thống đang bận, vui lòng thử lại sau.` | Lỗi truy vấn DB hoặc không tồn tại bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1` |
 | `000003` | `Unknown method` | Request sử dụng method khác `GET` |
 | `300002` | `Invalid authorization code` | Có truyền `authorization_code` nhưng không hợp lệ/hết hiệu lực |
 | `000002` | `Require login.` | Không truyền `token`/không có thông tin đăng nhập hợp lệ |
@@ -612,7 +612,7 @@ Sau khi nhận request `POST policy/policy`, Imuzik BE thực hiện:
    - `type ∈ {0,1}`;
    - `policy_version` được truyền;
    - `policy_id` đúng định dạng. Nếu sai định dạng → trả `130002`.
-2. Lấy bản ghi `consent_config` đang `is_current=1` và `status=active`, xác định `current_policy_version`.
+2. Lấy bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1`, xác định `current_policy_version`.
 3. So sánh `policy_version` FE gửi lên với `current_policy_version`:
    - Nếu khác nhau → trả `130009`, không gọi CM.
    - Nếu giống nhau → tiếp tục xử lý.
@@ -818,7 +818,7 @@ Các trường hợp CM trả `code!=0` hoặc lỗi kỹ thuật sau retry đư
 | Mục đích / Mô tả | Hiển thị Văn bản chấp thuận hiện hành. Với KH đã đăng nhập và có snapshot Consent local hợp lệ, cho phép mở popup để xem các Mục đích xử lý dữ liệu cá nhân đã Consent và bổ sung thêm các policy chưa Consent |
 | Hệ thống thực hiện | Imuzik FE, Imuzik BE, DB Imuzik, CM |
 | Trigger | KH mở mục **Văn bản chấp thuận/Chính sách**. Nếu đã đăng nhập và có snapshot Consent local hợp lệ của version hiện hành, KH có thể bấm button **Xem chính sách** để mở popup xem/bổ sung Consent |
-| Điều kiện đầu vào | Có `consent_config` current/active để hiển thị Văn bản chính. Trường hợp mở popup cập nhật: KH đã đăng nhập và có snapshot Consent local của version hiện hành gồm `type`, `confirm_ids/policy_ids`. Nếu không có snapshot local thì xử lý như KH chưa đăng nhập |
+| Điều kiện đầu vào | Có bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1` để hiển thị Văn bản chính. Trường hợp mở popup cập nhật: KH đã đăng nhập và có snapshot Consent local của version hiện hành gồm `type`, `confirm_ids/policy_ids`. Nếu không có snapshot local thì xử lý như KH chưa đăng nhập |
 | Điều kiện đầu ra thành công | KH xem được Văn bản chính. Nếu KH bổ sung policy hợp lệ thì hệ thống cập nhật Consent tại CM và `log_privacy_policy`; toàn bộ policy đã Consent trước đó vẫn được giữ nguyên |
 | Điều kiện đầu ra không thành công | KH bỏ tick ít nhất 01 policy đã Consent trước đó → disable button **Đồng ý**, hiển thị hướng dẫn thực hiện quyền rút Consent tại cửa hàng và không gọi API SAVE. Nếu không bổ sung policy mới thì button **Đồng ý** tiếp tục disable. Request bị can thiệp làm thiếu `confirm_ids` cũ phải bị BE từ chối |
 | Link Figma | N/A |
@@ -836,7 +836,7 @@ sequenceDiagram
 
     KH->>FE: Mở Văn bản chấp thuận
     FE->>BE: Lấy Văn bản hiện hành
-    BE->>DB: Lấy consent_config current active
+    BE->>DB: Lấy consent_config có is_current=1 và status=1
     DB-->>BE: document_content
     BE-->>FE: Trả Văn bản chính
     FE-->>KH: Hiển thị Văn bản chấp thuận
@@ -873,7 +873,7 @@ sequenceDiagram
 ##### Bước 1 - Hiển thị Văn bản chấp thuận
 
 1. KH truy cập mục **Văn bản chấp thuận/Chính sách**.
-2. FE lấy `document_content` của `consent_config` current/active qua cơ chế/API public của kênh App. Tên endpoint public **Cần Dev chốt**.
+2. FE lấy `document_content` từ bản ghi `consent_config` thỏa đồng thời `is_current=1` và `status=1` qua cơ chế/API public của kênh App. Tên endpoint public **Cần Dev chốt**.
 3. Màn hình chỉ hiển thị **Văn bản chấp thuận** hiện hành; không hiển thị trực tiếp Phụ lục và danh sách policy.
 4. Nếu KH chưa đăng nhập, hoặc đã đăng nhập theo nhánh fail-open nhưng không có snapshot Consent local hợp lệ của version hiện hành, hệ thống kết thúc luồng UC02 tại bước này và **không hiển thị** button **Xem chính sách**. Trường hợp fail-open được hiển thị giống KH chưa đăng nhập.
 
@@ -990,7 +990,7 @@ Nếu KH đã đăng nhập theo nhánh fail-open nhưng chưa có snapshot loca
 | BR04 | Cấu hình, nội dung và version | Imuzik quản lý `policy_version`, Văn bản chính và Phụ lục. Mỗi version có 01 `document_content` HTML dùng chung và 02 Phụ lục theo `type`, lưu dạng JSON string gồm `title`, `warning`, `parent_content`, `confirm_content`. `policy_version` chỉ được xác lập khi INSERT version `consent_config` mới; UPDATE bản ghi hiện tại không tự tăng version. Version KH đã xem phải được giữ/gửi lại khi SAVE và chỉ lưu khi bằng `current_policy_version`; khác version trả `130009`. |
 | BR05 | Policy và mapping CM | `is_required` xác định điều khoản bắt buộc; `policy.name` phải đúng key CM; `sortorder` xác định thứ tự Điều khoản 1-6. Policy hiển thị gồm `description`, `note`, `is_required`, `is_editable`; `note` rỗng/null thì không hiển thị và không tham gia validation; `is_editable` chỉ mang semantics trạng thái tick mặc định. Không suy ra field CM theo `policy.id`. |
 | BR06 | Nhóm tuổi và luồng xác nhận | `type=0/1` được lưu local; Consent trực tiếp trên Imuzik lấy từ lựa chọn của KH, Consent được công nhận từ CM lấy từ `type` CM trả về. KH dưới 16 tuổi trong phạm vi hiện tại chỉ khác Phụ lục hiển thị, không thu thập/xác minh định danh người giám hộ. Nếu chọn **Không phải bây giờ** thì logout và quay lại màn hình đăng nhập. MH02 có nút **Quay lại** để chọn lại nhóm tuổi và chưa thực hiện SAVE. |
-| BR07 | Fail-open cấu hình/nội dung | Lỗi đọc `consent_config`, không có current/active hoặc thiếu Văn bản/Phụ lục/danh sách policy thuộc nhóm fail-open: chỉ bỏ qua yêu cầu Consent trong lần đăng nhập hiện tại, không tạo/cập nhật `log_privacy_policy`, không coi KH đã Consent và lần đăng nhập sau phải kiểm tra lại. |
+| BR07 | Fail-open cấu hình/nội dung | Lỗi đọc `consent_config`, không tồn tại bản ghi thỏa đồng thời `is_current=1` và `status=1` hoặc thiếu Văn bản/Phụ lục/danh sách policy thuộc nhóm fail-open: chỉ bỏ qua yêu cầu Consent trong lần đăng nhập hiện tại, không tạo/cập nhật `log_privacy_policy`, không coi KH đã Consent và lần đăng nhập sau phải kiểm tra lại. |
 | BR08 | Lưu local và tương thích luồng cũ | Khi KH submit Consent hợp lệ hoặc Consent CM được công nhận, hệ thống ghi/cập nhật `log_privacy_policy` tại DB `imuzik`. Sau khi ghi local thành công, dual-write `vt_member.is_update_policy=1`, `vt_member.policy_id=<confirm_ids>` chỉ để tương thích; `vt_member` không được dùng làm source of truth. Không có cơ chế pending/resync CM trong phạm vi hiện tại. |
 | BR09 | UC02 - xem/cập nhật Consent | UC02 luôn hiển thị Văn bản chính. Chỉ KH đã đăng nhập và có snapshot local hợp lệ của version hiện hành mới thấy button **Xem chính sách** để mở popup Mục đích xử lý dữ liệu; KH fail-open không có snapshot hiển thị như chưa đăng nhập. Popup chỉ cho bổ sung Consent: button **Đồng ý** mặc định disable và tiếp tục disable nếu không có thay đổi; nếu bỏ tick policy đã Consent thì disable button và hiển thị **Mời Quý khách ra cửa hàng trực tiếp của Viettel để thực hiện quyền rút lại sự đồng ý!**; checkbox **Xác nhận chung** giữ behavior UC01 và tick toàn bộ policy. Chỉ enable **Đồng ý** khi giữ nguyên toàn bộ policy cũ và có ít nhất 01 policy mới; BE phải validate lại điều kiện này trước khi SAVE. |
 
@@ -1050,7 +1050,7 @@ UPDATE policy SET is_editable = 1 WHERE id IN (7, 8);
 | `appendix_type_0_content` | JSON string Phụ lục cho `type=0` |
 | `appendix_type_1_content` | JSON string Phụ lục cho `type=1` |
 | `is_current` | `1`: version hiện hành |
-| `status` | Trạng thái cấu hình; nghiệp vụ sử dụng bản ghi `active` |
+| `status` | Trạng thái cấu hình: `1` - Hoạt động; `0` - Không hoạt động |
 | `created_at`, `updated_at` | Thời điểm tạo/cập nhật |
 
 Cấu trúc logic của mỗi chuỗi Phụ lục:
@@ -1074,7 +1074,7 @@ CREATE TABLE consent_config (
     appendix_type_0_content LONGTEXT     NOT NULL,
     appendix_type_1_content LONGTEXT     NOT NULL,
     is_current              TINYINT(1)   NOT NULL DEFAULT 0,
-    status                  VARCHAR(20)  NOT NULL DEFAULT 'active',
+    status                  TINYINT(1)   NOT NULL DEFAULT 1,
     created_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              DATETIME     NULL ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_policy_version (policy_version),
